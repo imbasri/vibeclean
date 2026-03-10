@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vibeclean-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vibeclean
+      POSTGRES_PASSWORD: vibeclean123
+      POSTGRES_DB: vibeclean
+    ports:
+      - "5433:5432"
+    volumes:
+      - vibeclean_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibeclean -d vibeclean"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vibeclean_postgres_data:

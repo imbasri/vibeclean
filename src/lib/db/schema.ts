@@ -1,0 +1,632 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  decimal,
+  pgEnum,
+  uuid,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+
+// ============================================
+// ENUMS
+// ============================================
+
+export const subscriptionPlanEnum = pgEnum("subscription_plan", [
+  "starter",
+  "pro",
+  "enterprise",
+]);
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "trial",
+  "expired",
+  "cancelled",
+]);
+
+export const userRoleEnum = pgEnum("user_role", [
+  "owner",
+  "manager",
+  "cashier",
+  "courier",
+]);
+
+export const serviceUnitEnum = pgEnum("service_unit", [
+  "kg",
+  "pcs",
+  "meter",
+  "pasang",
+]);
+
+export const serviceCategoryEnum = pgEnum("service_category", [
+  "cuci",
+  "setrika",
+  "cuci_setrika",
+  "dry_clean",
+  "express",
+  "khusus",
+]);
+
+export const orderStatusEnum = pgEnum("order_status", [
+  "pending",
+  "processing",
+  "washing",
+  "drying",
+  "ironing",
+  "ready",
+  "delivered",
+  "completed",
+  "cancelled",
+]);
+
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "unpaid",
+  "partial",
+  "paid",
+  "refunded",
+]);
+
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "cash",
+  "qris",
+  "transfer",
+  "ewallet",
+]);
+
+export const invitationStatusEnum = pgEnum("invitation_status", [
+  "pending",
+  "accepted",
+  "expired",
+]);
+
+// ============================================
+// ORGANIZATIONS (TENANTS)
+// ============================================
+
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    logo: text("logo"),
+    plan: subscriptionPlanEnum("plan").notNull().default("starter"),
+    subscriptionStatus: subscriptionStatusEnum("subscription_status")
+      .notNull()
+      .default("trial"),
+    trialEndsAt: timestamp("trial_ends_at"),
+    ownerId: uuid("owner_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("organizations_slug_idx").on(table.slug),
+  ]
+);
+
+// ============================================
+// USERS (Better Auth compatible)
+// ============================================
+
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull().unique(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    image: text("image"),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("users_email_idx").on(table.email),
+  ]
+);
+
+// ============================================
+// BETTER AUTH: SESSIONS
+// ============================================
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("sessions_user_id_idx").on(table.userId),
+    uniqueIndex("sessions_token_idx").on(table.token),
+  ]
+);
+
+// ============================================
+// BETTER AUTH: ACCOUNTS (OAuth providers)
+// ============================================
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at"),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+    scope: text("scope"),
+    password: text("password"), // For email/password auth
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("accounts_user_id_idx").on(table.userId),
+  ]
+);
+
+// ============================================
+// BETTER AUTH: VERIFICATIONS (email, password reset)
+// ============================================
+
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("verifications_identifier_idx").on(table.identifier),
+  ]
+);
+
+// ============================================
+// BRANCHES
+// ============================================
+
+export const branches = pgTable(
+  "branches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    address: text("address").notNull(),
+    phone: text("phone").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("branches_organization_id_idx").on(table.organizationId),
+  ]
+);
+
+// ============================================
+// ORGANIZATION MEMBERS (User <-> Organization)
+// ============================================
+
+export const organizationMembers = pgTable(
+  "organization_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    invitedBy: uuid("invited_by").references(() => users.id),
+    joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("org_members_user_org_idx").on(table.userId, table.organizationId),
+    index("org_members_organization_id_idx").on(table.organizationId),
+  ]
+);
+
+// ============================================
+// BRANCH PERMISSIONS (Multi-role per branch)
+// ============================================
+
+export const branchPermissions = pgTable(
+  "branch_permissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => organizationMembers.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    role: userRoleEnum("role").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("branch_perm_member_branch_role_idx").on(
+      table.memberId,
+      table.branchId,
+      table.role
+    ),
+    index("branch_perm_branch_id_idx").on(table.branchId),
+  ]
+);
+
+// ============================================
+// STAFF INVITATIONS
+// ============================================
+
+export const staffInvitations = pgTable(
+  "staff_invitations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    invitedBy: uuid("invited_by")
+      .notNull()
+      .references(() => users.id),
+    status: invitationStatusEnum("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("staff_invitations_email_idx").on(table.email),
+    index("staff_invitations_org_id_idx").on(table.organizationId),
+  ]
+);
+
+// Invitation permissions (what roles will be assigned on accept)
+export const invitationPermissions = pgTable(
+  "invitation_permissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invitationId: uuid("invitation_id")
+      .notNull()
+      .references(() => staffInvitations.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    role: userRoleEnum("role").notNull(),
+  },
+  (table) => [
+    index("invitation_perm_invitation_id_idx").on(table.invitationId),
+  ]
+);
+
+// ============================================
+// LAUNDRY SERVICES
+// ============================================
+
+export const services = pgTable(
+  "services",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    category: serviceCategoryEnum("category").notNull(),
+    unit: serviceUnitEnum("unit").notNull(),
+    price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+    estimatedDays: integer("estimated_days").notNull().default(1),
+    description: text("description"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("services_branch_id_idx").on(table.branchId),
+    index("services_category_idx").on(table.category),
+  ]
+);
+
+// ============================================
+// CUSTOMERS
+// ============================================
+
+export const customers = pgTable(
+  "customers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    phone: text("phone").notNull(),
+    email: text("email"),
+    address: text("address"),
+    totalOrders: integer("total_orders").notNull().default(0),
+    totalSpent: decimal("total_spent", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    loyaltyPoints: integer("loyalty_points").notNull().default(0),
+    memberSince: timestamp("member_since").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("customers_organization_id_idx").on(table.organizationId),
+    index("customers_phone_idx").on(table.phone),
+  ]
+);
+
+// ============================================
+// ORDERS
+// ============================================
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderNumber: text("order_number").notNull().unique(),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "restrict" }),
+    customerId: uuid("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    customerName: text("customer_name").notNull(),
+    customerPhone: text("customer_phone").notNull(),
+    subtotal: decimal("subtotal", { precision: 15, scale: 2 }).notNull(),
+    discount: decimal("discount", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    discountType: text("discount_type"), // 'percentage' | 'fixed'
+    discountReason: text("discount_reason"),
+    total: decimal("total", { precision: 15, scale: 2 }).notNull(),
+    status: orderStatusEnum("status").notNull().default("pending"),
+    paymentStatus: paymentStatusEnum("payment_status")
+      .notNull()
+      .default("unpaid"),
+    paymentMethod: paymentMethodEnum("payment_method"),
+    paidAmount: decimal("paid_amount", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    notes: text("notes"),
+    estimatedCompletionAt: timestamp("estimated_completion_at").notNull(),
+    completedAt: timestamp("completed_at"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("orders_order_number_idx").on(table.orderNumber),
+    index("orders_branch_id_idx").on(table.branchId),
+    index("orders_customer_id_idx").on(table.customerId),
+    index("orders_status_idx").on(table.status),
+    index("orders_created_at_idx").on(table.createdAt),
+  ]
+);
+
+// ============================================
+// ORDER ITEMS
+// ============================================
+
+export const orderItems = pgTable(
+  "order_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    serviceId: uuid("service_id")
+      .notNull()
+      .references(() => services.id, { onDelete: "restrict" }),
+    serviceName: text("service_name").notNull(), // Snapshot at order time
+    quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
+    unit: serviceUnitEnum("unit").notNull(),
+    pricePerUnit: decimal("price_per_unit", { precision: 12, scale: 2 }).notNull(),
+    subtotal: decimal("subtotal", { precision: 15, scale: 2 }).notNull(),
+    notes: text("notes"),
+  },
+  (table) => [
+    index("order_items_order_id_idx").on(table.orderId),
+  ]
+);
+
+// ============================================
+// ORDER STATUS HISTORY
+// ============================================
+
+export const orderStatusHistory = pgTable(
+  "order_status_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    fromStatus: orderStatusEnum("from_status"),
+    toStatus: orderStatusEnum("to_status").notNull(),
+    changedBy: uuid("changed_by")
+      .notNull()
+      .references(() => users.id),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("order_status_history_order_id_idx").on(table.orderId),
+  ]
+);
+
+// ============================================
+// RELATIONS
+// ============================================
+
+export const organizationsRelations = relations(organizations, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [organizations.ownerId],
+    references: [users.id],
+  }),
+  branches: many(branches),
+  members: many(organizationMembers),
+  customers: many(customers),
+  invitations: many(staffInvitations),
+}));
+
+export const usersRelations = relations(users, ({ many }) => ({
+  ownedOrganizations: many(organizations),
+  memberships: many(organizationMembers),
+  createdOrders: many(orders),
+  sessions: many(sessions),
+  accounts: many(accounts),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}));
+
+export const branchesRelations = relations(branches, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [branches.organizationId],
+    references: [organizations.id],
+  }),
+  services: many(services),
+  orders: many(orders),
+  permissions: many(branchPermissions),
+}));
+
+export const organizationMembersRelations = relations(
+  organizationMembers,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [organizationMembers.userId],
+      references: [users.id],
+    }),
+    organization: one(organizations, {
+      fields: [organizationMembers.organizationId],
+      references: [organizations.id],
+    }),
+    inviter: one(users, {
+      fields: [organizationMembers.invitedBy],
+      references: [users.id],
+    }),
+    branchPermissions: many(branchPermissions),
+  })
+);
+
+export const branchPermissionsRelations = relations(branchPermissions, ({ one }) => ({
+  member: one(organizationMembers, {
+    fields: [branchPermissions.memberId],
+    references: [organizationMembers.id],
+  }),
+  branch: one(branches, {
+    fields: [branchPermissions.branchId],
+    references: [branches.id],
+  }),
+}));
+
+export const servicesRelations = relations(services, ({ one, many }) => ({
+  branch: one(branches, {
+    fields: [services.branchId],
+    references: [branches.id],
+  }),
+  orderItems: many(orderItems),
+}));
+
+export const customersRelations = relations(customers, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [customers.organizationId],
+    references: [organizations.id],
+  }),
+  orders: many(orders),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  branch: one(branches, {
+    fields: [orders.branchId],
+    references: [branches.id],
+  }),
+  customer: one(customers, {
+    fields: [orders.customerId],
+    references: [customers.id],
+  }),
+  createdByUser: one(users, {
+    fields: [orders.createdBy],
+    references: [users.id],
+  }),
+  items: many(orderItems),
+  statusHistory: many(orderStatusHistory),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
+  service: one(services, {
+    fields: [orderItems.serviceId],
+    references: [services.id],
+  }),
+}));
+
+export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderStatusHistory.orderId],
+    references: [orders.id],
+  }),
+  changedByUser: one(users, {
+    fields: [orderStatusHistory.changedBy],
+    references: [users.id],
+  }),
+}));
+
+export const staffInvitationsRelations = relations(staffInvitations, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [staffInvitations.organizationId],
+    references: [organizations.id],
+  }),
+  inviter: one(users, {
+    fields: [staffInvitations.invitedBy],
+    references: [users.id],
+  }),
+  permissions: many(invitationPermissions),
+}));
+
+export const invitationPermissionsRelations = relations(
+  invitationPermissions,
+  ({ one }) => ({
+    invitation: one(staffInvitations, {
+      fields: [invitationPermissions.invitationId],
+      references: [staffInvitations.id],
+    }),
+    branch: one(branches, {
+      fields: [invitationPermissions.branchId],
+      references: [branches.id],
+    }),
+  })
+);
