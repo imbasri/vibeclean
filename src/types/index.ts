@@ -153,6 +153,13 @@ export interface Order {
   paymentStatus: PaymentStatus;
   paymentMethod?: PaymentMethod;
   paidAmount: number;
+  // Mayar Payment Integration Fields
+  mayarPaymentId?: string;
+  mayarTransactionId?: string;
+  paymentUrl?: string;
+  qrCodeUrl?: string;
+  paymentExpiredAt?: Date;
+  paidAt?: Date;
   notes?: string;
   estimatedCompletionAt: Date;
   completedAt?: Date;
@@ -195,3 +202,9 @@ export interface BranchStats extends DashboardStats {
   branchId: string;
   branchName: string;
 }
+
+// ============================================
+// RE-EXPORT MAYAR TYPES
+// ============================================
+
+export * from "./mayar";

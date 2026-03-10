@@ -84,6 +84,19 @@ export const invitationStatusEnum = pgEnum("invitation_status", [
   "expired",
 ]);
 
+export const billingCycleEnum = pgEnum("billing_cycle", [
+  "monthly",
+  "yearly",
+]);
+
+export const subscriptionInvoiceStatusEnum = pgEnum("subscription_invoice_status", [
+  "pending",
+  "paid",
+  "failed",
+  "cancelled",
+  "refunded",
+]);
+
 // ============================================
 // ORGANIZATIONS (TENANTS)
 // ============================================
@@ -405,6 +418,13 @@ export const orders = pgTable(
     paidAmount: decimal("paid_amount", { precision: 15, scale: 2 })
       .notNull()
       .default("0"),
+    // Mayar Payment Integration Fields
+    mayarPaymentId: text("mayar_payment_id"), // Mayar invoice/payment ID
+    mayarTransactionId: text("mayar_transaction_id"), // Mayar transaction ID
+    paymentUrl: text("payment_url"), // URL untuk pembayaran (invoice link)
+    qrCodeUrl: text("qr_code_url"), // URL gambar QRIS
+    paymentExpiredAt: timestamp("payment_expired_at"), // Kapan payment expired
+    paidAt: timestamp("paid_at"), // Kapan dibayar
     notes: text("notes"),
     estimatedCompletionAt: timestamp("estimated_completion_at").notNull(),
     completedAt: timestamp("completed_at"),
@@ -420,6 +440,7 @@ export const orders = pgTable(
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_status_idx").on(table.status),
     index("orders_created_at_idx").on(table.createdAt),
+    index("orders_mayar_payment_id_idx").on(table.mayarPaymentId),
   ]
 );
 
@@ -486,6 +507,8 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   members: many(organizationMembers),
   customers: many(customers),
   invitations: many(staffInvitations),
+  subscription: one(subscriptions),
+  subscriptionInvoices: many(subscriptionInvoices),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -630,3 +653,105 @@ export const invitationPermissionsRelations = relations(
     }),
   })
 );
+
+// ============================================
+// SUBSCRIPTIONS (Billing & Subscription Tracking)
+// ============================================
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .unique(),
+    plan: subscriptionPlanEnum("plan").notNull().default("starter"),
+    status: subscriptionStatusEnum("status").notNull().default("trial"),
+    billingCycle: billingCycleEnum("billing_cycle").notNull().default("monthly"),
+    price: decimal("price", { precision: 15, scale: 2 }).notNull().default("0"),
+    // Mayar integration
+    mayarCustomerId: text("mayar_customer_id"),
+    mayarSubscriptionId: text("mayar_subscription_id"),
+    // Dates
+    trialStartsAt: timestamp("trial_starts_at"),
+    trialEndsAt: timestamp("trial_ends_at"),
+    currentPeriodStart: timestamp("current_period_start"),
+    currentPeriodEnd: timestamp("current_period_end"),
+    cancelledAt: timestamp("cancelled_at"),
+    // Usage tracking
+    monthlyOrderCount: integer("monthly_order_count").notNull().default(0),
+    lastOrderCountReset: timestamp("last_order_count_reset").defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("subscriptions_organization_id_idx").on(table.organizationId),
+    index("subscriptions_status_idx").on(table.status),
+    index("subscriptions_mayar_subscription_id_idx").on(table.mayarSubscriptionId),
+  ]
+);
+
+// ============================================
+// SUBSCRIPTION INVOICES (Payment History)
+// ============================================
+
+export const subscriptionInvoices = pgTable(
+  "subscription_invoices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    invoiceNumber: text("invoice_number").notNull().unique(),
+    amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+    status: subscriptionInvoiceStatusEnum("status").notNull().default("pending"),
+    plan: subscriptionPlanEnum("plan").notNull(),
+    billingCycle: billingCycleEnum("billing_cycle").notNull(),
+    // Mayar integration
+    mayarPaymentId: text("mayar_payment_id"),
+    mayarTransactionId: text("mayar_transaction_id"),
+    paymentUrl: text("payment_url"),
+    qrCodeUrl: text("qr_code_url"),
+    // Dates
+    periodStart: timestamp("period_start").notNull(),
+    periodEnd: timestamp("period_end").notNull(),
+    dueDate: timestamp("due_date").notNull(),
+    paidAt: timestamp("paid_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("subscription_invoices_subscription_id_idx").on(table.subscriptionId),
+    index("subscription_invoices_organization_id_idx").on(table.organizationId),
+    index("subscription_invoices_status_idx").on(table.status),
+    index("subscription_invoices_mayar_payment_id_idx").on(table.mayarPaymentId),
+    uniqueIndex("subscription_invoices_invoice_number_idx").on(table.invoiceNumber),
+  ]
+);
+
+// ============================================
+// SUBSCRIPTION RELATIONS
+// ============================================
+
+export const subscriptionsRelations = relations(subscriptions, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [subscriptions.organizationId],
+    references: [organizations.id],
+  }),
+  invoices: many(subscriptionInvoices),
+}));
+
+export const subscriptionInvoicesRelations = relations(subscriptionInvoices, ({ one }) => ({
+  subscription: one(subscriptions, {
+    fields: [subscriptionInvoices.subscriptionId],
+    references: [subscriptions.id],
+  }),
+  organization: one(organizations, {
+    fields: [subscriptionInvoices.organizationId],
+    references: [organizations.id],
+  }),
+}));

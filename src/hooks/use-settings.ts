@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { uploadProfileImage, uploadOrganizationLogo } from "@/app/actions/upload";
 
 // Types
 export interface ProfileData {
@@ -40,6 +41,7 @@ interface UseProfileReturn {
   refetch: () => Promise<void>;
   updateProfile: (data: ProfileUpdateData) => Promise<{ success: boolean; error?: string }>;
   isUpdating: boolean;
+  uploadImage: (file: File) => Promise<{ success: boolean; imageUrl?: string; error?: string }>;
 }
 
 interface UseOrganizationReturn {
@@ -49,6 +51,17 @@ interface UseOrganizationReturn {
   refetch: () => Promise<void>;
   updateOrganization: (data: OrganizationUpdateData) => Promise<{ success: boolean; error?: string }>;
   isUpdating: boolean;
+  uploadLogo: (file: File) => Promise<{ success: boolean; logoUrl?: string; error?: string }>;
+}
+
+export interface PasswordChangeData {
+  currentPassword: string;
+  newPassword: string;
+}
+
+interface UsePasswordReturn {
+  changePassword: (data: PasswordChangeData) => Promise<{ success: boolean; error?: string }>;
+  isChanging: boolean;
 }
 
 // Hook for user profile settings
@@ -130,6 +143,15 @@ export function useProfile(): UseProfileReturn {
     refetch: fetchProfile,
     updateProfile,
     isUpdating,
+    uploadImage: async (file: File): Promise<{ success: boolean; imageUrl?: string; error?: string }> => {
+      const formData = new FormData();
+      formData.append("image", file);
+      const result = await uploadProfileImage(formData);
+      if (result.success && result.imageUrl) {
+        setProfile((prev) => (prev ? { ...prev, image: result.imageUrl! } : prev));
+      }
+      return result;
+    },
   };
 }
 
@@ -219,5 +241,56 @@ export function useOrganization(): UseOrganizationReturn {
     refetch: fetchOrganization,
     updateOrganization,
     isUpdating,
+    uploadLogo: async (file: File): Promise<{ success: boolean; logoUrl?: string; error?: string }> => {
+      const formData = new FormData();
+      formData.append("logo", file);
+      const result = await uploadOrganizationLogo(formData);
+      if (result.success && result.logoUrl) {
+        setOrganization((prev) => (prev ? { ...prev, logo: result.logoUrl! } : prev));
+      }
+      return result;
+    },
+  };
+}
+
+// Hook for password change
+export function usePassword(): UsePasswordReturn {
+  const [isChanging, setIsChanging] = useState(false);
+
+  const changePassword = useCallback(
+    async (data: PasswordChangeData): Promise<{ success: boolean; error?: string }> => {
+      try {
+        setIsChanging(true);
+
+        const response = await fetch("/api/settings/password", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to change password");
+        }
+
+        return { success: true };
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to change password";
+        console.error("Error changing password:", err);
+        return { success: false, error: message };
+      } finally {
+        setIsChanging(false);
+      }
+    },
+    []
+  );
+
+  return {
+    changePassword,
+    isChanging,
   };
 }

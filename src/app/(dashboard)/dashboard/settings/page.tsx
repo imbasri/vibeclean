@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, type Variants, type Easing } from "framer-motion";
 import {
   User,
@@ -40,7 +40,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { PermissionGuard } from "@/components/common/permission-guard";
-import { useProfile, useOrganization } from "@/hooks/use-settings";
+import { useProfile, useOrganization, usePassword } from "@/hooks/use-settings";
 
 // Animation config
 const easeOut: Easing = [0.16, 1, 0.3, 1];
@@ -60,15 +60,27 @@ export default function SettingsPage() {
     profile, 
     isLoading: profileLoading, 
     updateProfile, 
-    isUpdating: profileUpdating 
+    isUpdating: profileUpdating,
+    uploadImage 
   } = useProfile();
   
   const { 
     organization, 
     isLoading: orgLoading, 
     updateOrganization, 
-    isUpdating: orgUpdating 
+    isUpdating: orgUpdating,
+    uploadLogo 
   } = useOrganization();
+
+  const { changePassword, isChanging: passwordChanging } = usePassword();
+
+  // File upload refs
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const orgLogoInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload states
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
@@ -190,18 +202,31 @@ export default function SettingsPage() {
     gooeyToast.success("Notifikasi Disimpan", { description: "Preferensi notifikasi berhasil disimpan" });
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
+    if (!passwordForm.currentPassword) {
+      gooeyToast.error("Password Saat Ini Diperlukan", { description: "Masukkan password saat ini untuk verifikasi" });
+      return;
+    }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       gooeyToast.error("Password Tidak Cocok", { description: "Password baru dan konfirmasi harus sama" });
       return;
     }
-    if (passwordForm.newPassword.length < 8) {
-      gooeyToast.error("Password Terlalu Pendek", { description: "Password minimal 8 karakter" });
+    if (passwordForm.newPassword.length < 6) {
+      gooeyToast.error("Password Terlalu Pendek", { description: "Password minimal 6 karakter" });
       return;
     }
-    // TODO: Implement password change via Better Auth API
-    gooeyToast.success("Password Diubah", { description: "Password berhasil diperbarui" });
-    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+
+    const result = await changePassword({
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword,
+    });
+
+    if (result.success) {
+      gooeyToast.success("Password Diubah", { description: "Password berhasil diperbarui" });
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } else {
+      gooeyToast.error("Gagal Mengubah Password", { description: result.error || "Terjadi kesalahan" });
+    }
   };
 
   const handleSaveAppearance = () => {
@@ -274,11 +299,45 @@ export default function SettingsPage() {
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <Button variant="outline" size="sm">
-                          <Camera className="h-4 w-4 mr-2" />
+                        <input
+                          type="file"
+                          ref={profileImageInputRef}
+                          className="hidden"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            
+                            setIsUploadingProfile(true);
+                            const result = await uploadImage(file);
+                            setIsUploadingProfile(false);
+                            
+                            if (result.success) {
+                              gooeyToast.success("Foto Diubah", { description: "Foto profil berhasil diperbarui" });
+                            } else {
+                              gooeyToast.error("Gagal Upload", { description: result.error || "Terjadi kesalahan" });
+                            }
+                            
+                            // Reset input
+                            if (profileImageInputRef.current) {
+                              profileImageInputRef.current.value = "";
+                            }
+                          }}
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => profileImageInputRef.current?.click()}
+                          disabled={isUploadingProfile}
+                        >
+                          {isUploadingProfile ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Camera className="h-4 w-4 mr-2" />
+                          )}
                           Ubah Foto
                         </Button>
-                        <p className="text-sm text-gray-500 mt-2">JPG, PNG maksimal 2MB</p>
+                        <p className="text-sm text-gray-500 mt-2">JPG, PNG maksimal 500KB</p>
                       </div>
                     </div>
 
@@ -365,15 +424,57 @@ export default function SettingsPage() {
                     <>
                       {/* Logo */}
                       <div className="flex items-center gap-6">
-                        <div className="h-20 w-20 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
-                          {orgForm.name.substring(0, 2).toUpperCase() || "VC"}
+                        <div className="h-20 w-20 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
+                          {organization?.logo ? (
+                            <img 
+                              src={organization.logo} 
+                              alt="Logo" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            orgForm.name.substring(0, 2).toUpperCase() || "VC"
+                          )}
                         </div>
                         <div>
-                          <Button variant="outline" size="sm">
-                            <Camera className="h-4 w-4 mr-2" />
+                          <input
+                            type="file"
+                            ref={orgLogoInputRef}
+                            className="hidden"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              
+                              setIsUploadingLogo(true);
+                              const result = await uploadLogo(file);
+                              setIsUploadingLogo(false);
+                              
+                              if (result.success) {
+                                gooeyToast.success("Logo Diubah", { description: "Logo organisasi berhasil diperbarui" });
+                              } else {
+                                gooeyToast.error("Gagal Upload", { description: result.error || "Terjadi kesalahan" });
+                              }
+                              
+                              // Reset input
+                              if (orgLogoInputRef.current) {
+                                orgLogoInputRef.current.value = "";
+                              }
+                            }}
+                          />
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => orgLogoInputRef.current?.click()}
+                            disabled={isUploadingLogo}
+                          >
+                            {isUploadingLogo ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Camera className="h-4 w-4 mr-2" />
+                            )}
                             Ubah Logo
                           </Button>
-                          <p className="text-sm text-gray-500 mt-2">Logo bisnis Anda</p>
+                          <p className="text-sm text-gray-500 mt-2">JPG, PNG maksimal 500KB</p>
                         </div>
                       </div>
 
@@ -610,7 +711,12 @@ export default function SettingsPage() {
                         onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                       />
                     </div>
-                    <Button onClick={handleChangePassword} className="w-fit">
+                    <Button onClick={handleChangePassword} className="w-fit" disabled={passwordChanging}>
+                      {passwordChanging ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Lock className="h-4 w-4 mr-2" />
+                      )}
                       Ubah Password
                     </Button>
                   </div>

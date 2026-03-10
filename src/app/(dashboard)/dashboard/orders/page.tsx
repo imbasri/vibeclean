@@ -32,6 +32,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CancelOrderDialog } from "@/components/common";
+import { OrderDetailDialog } from "@/components/orders";
+import { PaymentQRISDialog } from "@/components/pos/payment-qris-dialog";
 import {
   Table,
   TableBody,
@@ -125,6 +127,20 @@ export default function OrdersPage() {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  
+  // Order detail dialog state
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  
+  // QRIS Payment dialog state
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [orderForPayment, setOrderForPayment] = useState<Order | null>(null);
+
+  // Handler for opening detail dialog
+  const openDetailDialog = (order: Order) => {
+    setSelectedOrder(order);
+    setIsDetailDialogOpen(true);
+  };
 
   // Handler for opening cancel dialog
   const openCancelDialog = (order: Order) => {
@@ -153,6 +169,28 @@ export default function OrdersPage() {
     } finally {
       setIsCancelling(false);
     }
+  };
+  
+  // Handler for opening payment dialog from detail view
+  const handleOpenPayment = () => {
+    if (selectedOrder) {
+      setOrderForPayment(selectedOrder);
+      setIsDetailDialogOpen(false);
+      setShowPaymentDialog(true);
+    }
+  };
+  
+  // Handler for payment success
+  const handlePaymentSuccess = () => {
+    setShowPaymentDialog(false);
+    setOrderForPayment(null);
+    refetch();
+    gooeyToast.success("Pembayaran berhasil diterima!");
+  };
+  
+  // Handler for payment expired
+  const handlePaymentExpired = () => {
+    gooeyToast.warning("Waktu pembayaran habis");
   };
 
   // Filter and sort orders locally (API already filters by branch, status, payment)
@@ -428,7 +466,7 @@ export default function OrdersPage() {
                           )}
                         />
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openDetailDialog(order)}>
                             <Eye className="w-4 h-4 mr-2" />
                             Lihat Detail
                           </DropdownMenuItem>
@@ -511,7 +549,8 @@ export default function OrdersPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.03 }}
-                      className="group hover:bg-muted/50"
+                      className="group hover:bg-muted/50 cursor-pointer"
+                      onClick={() => openDetailDialog(order)}
                     >
                       <TableCell className="font-mono font-medium text-blue-600 dark:text-blue-400">
                         {order.orderNumber}
@@ -547,7 +586,7 @@ export default function OrdersPage() {
                           {formatDate(order.createdAt)}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={(props) => (
@@ -559,7 +598,7 @@ export default function OrdersPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Aksi</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openDetailDialog(order)}>
                               <Eye className="w-4 h-4 mr-2" />
                               Lihat Detail
                             </DropdownMenuItem>
@@ -656,6 +695,28 @@ export default function OrdersPage() {
         orderNumber={orderToCancel?.orderNumber || ""}
         onConfirm={handleCancelOrder}
       />
+      
+      {/* Order Detail Dialog */}
+      <OrderDetailDialog
+        open={isDetailDialogOpen}
+        onOpenChange={setIsDetailDialogOpen}
+        order={selectedOrder}
+        onOpenPayment={handleOpenPayment}
+      />
+      
+      {/* QRIS Payment Dialog */}
+      {orderForPayment && (
+        <PaymentQRISDialog
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          orderId={orderForPayment.id}
+          orderNumber={orderForPayment.orderNumber}
+          amount={orderForPayment.total}
+          customerName={orderForPayment.customerName}
+          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentExpired={handlePaymentExpired}
+        />
+      )}
     </div>
   );
 }

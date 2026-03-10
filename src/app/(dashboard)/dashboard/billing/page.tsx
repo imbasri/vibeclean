@@ -68,7 +68,7 @@ const itemVariants: Variants = {
   },
 };
 
-// Plan configurations
+// Plan configurations - Updated to match PRD pricing
 const plans: {
   id: SubscriptionPlan;
   name: string;
@@ -77,6 +77,7 @@ const plans: {
   icon: React.ElementType;
   color: string;
   popular?: boolean;
+  isFree?: boolean;
   features: string[];
   limits: {
     branches: number | "Unlimited";
@@ -87,28 +88,30 @@ const plans: {
   {
     id: "starter",
     name: "Starter",
-    price: 199000,
+    price: 0, // GRATIS sesuai PRD
     description: "Cocok untuk laundry baru dengan 1 cabang",
     icon: Zap,
     color: "from-blue-500 to-blue-600",
+    isFree: true,
     features: [
       "1 Cabang",
       "3 Staff/Cabang",
-      "500 Order/bulan",
+      "100 Order/bulan", // Updated sesuai PRD
       "Laporan dasar",
       "Notifikasi WhatsApp",
       "POS Kasir",
+      "QRIS & VA Mayar",
     ],
     limits: {
       branches: 1,
       staff: 3,
-      orders: 500,
+      orders: 100, // Updated sesuai PRD
     },
   },
   {
     id: "pro",
     name: "Pro",
-    price: 499000,
+    price: 149000, // Rp 149.000 sesuai PRD
     description: "Untuk laundry berkembang dengan multiple cabang",
     icon: Crown,
     color: "from-purple-500 to-purple-600",
@@ -116,23 +119,23 @@ const plans: {
     features: [
       "5 Cabang",
       "10 Staff/Cabang",
-      "2000 Order/bulan",
+      "Unlimited Order",
       "Laporan lengkap",
       "Notifikasi WhatsApp",
       "POS Kasir + Kurir",
-      "API Integration",
-      "Priority Support",
+      "Kupon & Paket Member",
+      "WhatsApp Group Support",
     ],
     limits: {
       branches: 5,
       staff: 10,
-      orders: 2000,
+      orders: "Unlimited",
     },
   },
   {
     id: "enterprise",
     name: "Enterprise",
-    price: 999000,
+    price: -1, // Custom pricing
     description: "Untuk bisnis laundry skala besar",
     icon: Building2,
     color: "from-amber-500 to-amber-600",
@@ -142,9 +145,9 @@ const plans: {
       "Unlimited Order",
       "Laporan analytics",
       "Notifikasi WhatsApp + Email",
-      "All Features",
-      "Custom Integration",
-      "Dedicated Support",
+      "Custom Domain",
+      "Dedicated Payment Gateway",
+      "Dedicated Manager",
       "SLA 99.9%",
     ],
     limits: {
@@ -156,9 +159,11 @@ const plans: {
 ];
 
 export default function BillingPage() {
-  const { data, isLoading, error, refetch, upgradePlan, isUpgrading } = useBilling();
+  const { data, isLoading, error, refetch, subscribeToPlan, isSubscribing } = useBilling();
   const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
   const handleUpgrade = (planId: SubscriptionPlan) => {
     setSelectedPlan(planId);
@@ -168,13 +173,23 @@ export default function BillingPage() {
   const confirmUpgrade = async () => {
     if (!selectedPlan) return;
     
-    const result = await upgradePlan(selectedPlan);
+    const result = await subscribeToPlan(selectedPlan, "monthly");
     
     if (result.success) {
-      const plan = plans.find((p) => p.id === selectedPlan);
-      gooeyToast.success("Upgrade Berhasil", { 
-        description: `Anda telah upgrade ke paket ${plan?.name}!` 
-      });
+      if (result.requiresPayment && result.paymentUrl) {
+        // Open payment URL in new tab or show payment dialog
+        setPaymentUrl(result.paymentUrl);
+        setPaymentDialogOpen(true);
+        gooeyToast.success("Invoice Dibuat", { 
+          description: `Silakan lakukan pembayaran untuk aktivasi paket.` 
+        });
+      } else {
+        // Free plan activated
+        const plan = plans.find((p) => p.id === selectedPlan);
+        gooeyToast.success("Paket Diaktifkan", { 
+          description: result.message || `Anda telah beralih ke paket ${plan?.name}!` 
+        });
+      }
     } else {
       gooeyToast.error("Gagal Upgrade", { 
         description: result.error || "Terjadi kesalahan saat upgrade" 
@@ -410,8 +425,22 @@ export default function BillingPage() {
                       </div>
                       <CardTitle>{plan.name}</CardTitle>
                       <div className="mt-2">
-                        <span className="text-3xl font-bold">{formatCurrency(plan.price)}</span>
-                        <span className="text-gray-500">/bulan</span>
+                        {plan.isFree ? (
+                          <>
+                            <span className="text-3xl font-bold text-green-600">GRATIS</span>
+                            <p className="text-sm text-gray-500 mt-1">Selamanya</p>
+                          </>
+                        ) : plan.price === -1 ? (
+                          <>
+                            <span className="text-2xl font-bold">Hubungi Kami</span>
+                            <p className="text-sm text-gray-500 mt-1">Custom pricing</p>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-3xl font-bold">{formatCurrency(plan.price)}</span>
+                            <span className="text-gray-500">/bulan</span>
+                          </>
+                        )}
                       </div>
                       <CardDescription className="mt-2">{plan.description}</CardDescription>
                     </CardHeader>
@@ -431,6 +460,14 @@ export default function BillingPage() {
                           <Check className="h-4 w-4 mr-2" />
                           Paket Saat Ini
                         </Button>
+                      ) : plan.id === "enterprise" ? (
+                        <Button 
+                          className={`w-full bg-gradient-to-r ${plan.color} hover:opacity-90`}
+                          onClick={() => window.open("https://wa.me/6281234567890?text=Halo, saya tertarik dengan paket Enterprise VibeClean", "_blank")}
+                        >
+                          Hubungi Sales
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </Button>
                       ) : isDowngrade ? (
                         <Button className="w-full" variant="outline" disabled>
                           Downgrade
@@ -439,13 +476,13 @@ export default function BillingPage() {
                         <Button 
                           className={`w-full bg-gradient-to-r ${plan.color} hover:opacity-90`}
                           onClick={() => handleUpgrade(plan.id)}
-                          disabled={isUpgrading}
+                          disabled={isSubscribing}
                         >
-                          {isUpgrading ? (
+                          {isSubscribing ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           ) : (
                             <>
-                              Upgrade
+                              {plan.isFree ? "Mulai Gratis" : "Upgrade"}
                               <ArrowRight className="h-4 w-4 ml-2" />
                             </>
                           )}
@@ -585,7 +622,11 @@ export default function BillingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Harga/bulan</span>
-                    <span className="font-medium">{formatCurrency(plans.find((p) => p.id === selectedPlan)?.price || 0)}</span>
+                    <span className="font-medium">
+                      {plans.find((p) => p.id === selectedPlan)?.isFree 
+                        ? "GRATIS" 
+                        : formatCurrency(plans.find((p) => p.id === selectedPlan)?.price || 0)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -594,11 +635,64 @@ export default function BillingPage() {
               <Button variant="outline" onClick={() => setIsUpgradeDialogOpen(false)}>
                 Batal
               </Button>
-              <Button onClick={confirmUpgrade} disabled={isUpgrading}>
-                {isUpgrading ? (
+              <Button onClick={confirmUpgrade} disabled={isSubscribing}>
+                {isSubscribing ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : null}
                 Konfirmasi Upgrade
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Payment Dialog - Shows Mayar payment link */}
+        <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+          <DialogContent className="sm:max-w-[450px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-blue-600" />
+                Pembayaran Subscription
+              </DialogTitle>
+              <DialogDescription>
+                Invoice telah dibuat. Silakan lakukan pembayaran untuk mengaktifkan paket Anda.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800 mb-3">
+                  Klik tombol di bawah untuk membuka halaman pembayaran. Anda dapat membayar menggunakan:
+                </p>
+                <ul className="text-sm text-blue-700 space-y-1 ml-4 list-disc">
+                  <li>QRIS (Scan dengan aplikasi e-wallet)</li>
+                  <li>Virtual Account (Transfer Bank)</li>
+                </ul>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Shield className="h-4 w-4 text-green-500" />
+                <span>Pembayaran aman & terenkripsi via Mayar</span>
+              </div>
+            </div>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setPaymentDialogOpen(false);
+                  setPaymentUrl(null);
+                }}
+              >
+                Bayar Nanti
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (paymentUrl) {
+                    window.open(paymentUrl, "_blank");
+                  }
+                  setPaymentDialogOpen(false);
+                }}
+                className="bg-gradient-to-r from-blue-500 to-blue-600"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Bayar Sekarang
               </Button>
             </DialogFooter>
           </DialogContent>

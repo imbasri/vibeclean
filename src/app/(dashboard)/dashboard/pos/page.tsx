@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,11 +19,14 @@ import {
   Loader2,
   Check,
   Percent,
+  Printer,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/auth-context";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { PermissionGuard } from "@/components/common/permission-guard";
+import { openReceiptWindow } from "@/components/pos/receipt-print";
+import { PaymentQRISDialog } from "@/components/pos/payment-qris-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,6 +253,72 @@ export default function POSPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [lastOrderDetails, setLastOrderDetails] = useState<{
+    items: Array<{
+      serviceName: string;
+      quantity: number;
+      unit: string;
+      pricePerUnit: number;
+      subtotal: number;
+    }>;
+    subtotal: number;
+    discount: number;
+    discountType?: "percentage" | "fixed";
+    total: number;
+    paymentMethod: string;
+    estimatedCompletionAt: Date;
+  } | null>(null);
+  
+  // QRIS Payment Dialog state
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<{
+    id: string;
+    orderNumber: string;
+    total: number;
+    customerName: string;
+  } | null>(null);
+  
+  const [foundCustomer, setFoundCustomer] = useState<{
+    id: string;
+    name: string;
+    totalOrders: number;
+    totalSpent: string;
+  } | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+
+  // Customer auto-lookup by phone
+  useEffect(() => {
+    const phone = customerPhone;
+    if (!phone || phone.length < 4) {
+      setFoundCustomer(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsLookingUp(true);
+      try {
+        const response = await fetch(`/api/customers/lookup?phone=${encodeURIComponent(phone)}`);
+        const data = await response.json();
+        
+        if (data.customer) {
+          setFoundCustomer(data.customer);
+          // Auto-fill customer name if found
+          reset((prev) => ({
+            ...prev,
+            customerName: data.customer.name,
+          }));
+        } else {
+          setFoundCustomer(null);
+        }
+      } catch (error) {
+        console.error("Customer lookup error:", error);
+      } finally {
+        setIsLookingUp(false);
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [customerPhone, reset]);
 
   // Filter services from API
   const filteredServices = useMemo(() => {
@@ -337,10 +406,50 @@ export default function POSPage() {
       const newOrder = await createOrder(orderData);
       
       if (newOrder) {
-        setLastOrderId(newOrder.orderNumber || newOrder.id);
+        const orderNumber = newOrder.orderNumber || newOrder.id;
+        
+        // Store order details for receipt printing
+        const orderDetails = {
+          items: cart.map((item) => ({
+            serviceName: item.service.name,
+            quantity: item.quantity,
+            unit: item.service.unit,
+            pricePerUnit: item.service.price,
+            subtotal: item.service.price * item.quantity,
+          })),
+          subtotal: subtotal,
+          discount: discountAmount,
+          discountType: discount > 0 ? discountType : undefined,
+          total: total,
+          paymentMethod: paymentMethod || "cash",
+          estimatedCompletionAt: new Date(newOrder.estimatedCompletionAt),
+        };
+        
+        setLastOrderId(orderNumber);
+        setLastOrderDetails(orderDetails);
         setShowCheckoutDialog(false);
-        setShowSuccessDialog(true);
-        gooeyToast.success("Order berhasil dibuat!");
+        
+        // Check if this is a digital payment (QRIS or Transfer)
+        const isDigitalPayment = paymentMethod === "qris" || paymentMethod === "transfer";
+        
+        if (isDigitalPayment) {
+          // Open QRIS payment dialog for digital payments
+          setPendingPaymentOrder({
+            id: newOrder.id,
+            orderNumber: orderNumber,
+            total: total,
+            customerName: customerName,
+          });
+          setShowPaymentDialog(true);
+          gooeyToast.success("Order dibuat! Silakan scan QR untuk pembayaran.");
+        } else {
+          // Cash or E-Wallet (manual) - show success immediately
+          setShowSuccessDialog(true);
+          gooeyToast.success("Order berhasil dibuat!");
+        }
+        
+        // Send WhatsApp notification (fire and forget - don't block UI)
+        sendWhatsAppNotification(newOrder, orderNumber, isDigitalPayment);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal membuat order";
@@ -350,10 +459,95 @@ export default function POSPage() {
       setIsProcessing(false);
     }
   };
+  
+  // Helper function to send WhatsApp notification
+  const sendWhatsAppNotification = async (
+    newOrder: { estimatedCompletionAt?: string | Date }, 
+    orderNumber: string,
+    isDigitalPayment: boolean
+  ) => {
+    try {
+      const paymentStatus = paymentMethod === "cash" 
+        ? "Lunas (Cash)" 
+        : isDigitalPayment 
+          ? "Menunggu Pembayaran Digital" 
+          : "Bayar di Tempat";
+          
+      const message = `Halo ${customerName}! 
+
+Terima kasih telah menggunakan VibeClean Laundry.
+
+📋 Detail Order:
+• No. Order: ${orderNumber}
+• Total: Rp ${total.toLocaleString("id-ID")}
+• Status: ${paymentStatus}
+
+📍 Estimasi Selesai:
+${newOrder.estimatedCompletionAt ? new Date(newOrder.estimatedCompletionAt).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Akan diinformasikan"}
+
+Terima kasih! 🙏`;
+
+      await fetch("/api/notifications/whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: customerPhone,
+          message,
+        }),
+      });
+    } catch (waError) {
+      // Don't block the flow if WhatsApp fails
+      console.error("WhatsApp notification failed:", waError);
+    }
+  };
+  
+  // Handle payment success callback from QRIS dialog
+  const handlePaymentSuccess = () => {
+    setShowPaymentDialog(false);
+    setPendingPaymentOrder(null);
+    setShowSuccessDialog(true);
+    gooeyToast.success("Pembayaran berhasil diterima!");
+  };
+  
+  // Handle payment expired callback from QRIS dialog
+  const handlePaymentExpired = () => {
+    // User can retry or close - dialog handles this
+    gooeyToast.warning("Waktu pembayaran habis. Silakan buat pembayaran baru.");
+  };
+  
+  // Handle payment dialog close (user chose "Bayar Nanti")
+  const handlePaymentDialogClose = (open: boolean) => {
+    if (!open) {
+      setShowPaymentDialog(false);
+      // Still show success dialog - order was created, just not paid yet
+      setShowSuccessDialog(true);
+    }
+  };
 
   const handleSuccessClose = () => {
     setShowSuccessDialog(false);
+    setLastOrderId(null);
+    setLastOrderDetails(null);
+    setPendingPaymentOrder(null);
     clearCart();
+  };
+
+  const handlePrintReceipt = () => {
+    if (!lastOrderDetails || !lastOrderId) return;
+    
+    openReceiptWindow({
+      orderNumber: lastOrderId,
+      customerName: customerName || "Pelanggan",
+      customerPhone: customerPhone || "-",
+      items: lastOrderDetails.items,
+      subtotal: lastOrderDetails.subtotal,
+      discount: lastOrderDetails.discount,
+      discountType: lastOrderDetails.discountType,
+      total: lastOrderDetails.total,
+      paymentMethod: lastOrderDetails.paymentMethod,
+      paidAmount: lastOrderDetails.total,
+      estimatedCompletionAt: lastOrderDetails.estimatedCompletionAt,
+    });
   };
 
   // Category tabs
@@ -482,9 +676,20 @@ export default function POSPage() {
                       {...register("customerPhone")}
                       className={`pl-10 ${errors.customerPhone ? "border-red-500" : ""}`}
                     />
+                    {isLookingUp && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                    )}
                   </div>
                   {errors.customerPhone && (
                     <p className="text-xs text-red-500">{errors.customerPhone.message}</p>
+                  )}
+                  {foundCustomer && !errors.customerPhone && (
+                    <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded text-xs">
+                      <Check className="w-3 h-3 text-green-600" />
+                      <span className="text-green-700 dark:text-green-400">
+                        Pelanggan terdaftar: {foundCustomer.name} ({foundCustomer.totalOrders} orders)
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -663,16 +868,38 @@ export default function POSPage() {
               <DialogDescription>
                 Order #{lastOrderId || "..."} telah dibuat.
                 <br />
-                Notifikasi akan dikirim ke WhatsApp pelanggan.
+                {pendingPaymentOrder ? "Pembayaran telah diterima." : "Notifikasi akan dikirim ke WhatsApp pelanggan."}
               </DialogDescription>
             </div>
-            <DialogFooter>
-              <Button onClick={handleSuccessClose} className="w-full">
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handlePrintReceipt}
+                className="flex-1"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Cetak Nota
+              </Button>
+              <Button onClick={handleSuccessClose} className="flex-1">
                 Selesai
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
+        
+        {/* QRIS Payment Dialog */}
+        {pendingPaymentOrder && (
+          <PaymentQRISDialog
+            open={showPaymentDialog}
+            onOpenChange={handlePaymentDialogClose}
+            orderId={pendingPaymentOrder.id}
+            orderNumber={pendingPaymentOrder.orderNumber}
+            amount={pendingPaymentOrder.total}
+            customerName={pendingPaymentOrder.customerName}
+            onPaymentSuccess={handlePaymentSuccess}
+            onPaymentExpired={handlePaymentExpired}
+          />
+        )}
       </PermissionGuard>
     </DashboardLayout>
   );

@@ -8,8 +8,10 @@ import {
   orders,
   organizationMembers,
   branchPermissions,
+  subscriptions,
+  subscriptionInvoices,
 } from "@/lib/db";
-import { eq, and, inArray, sql, gte } from "drizzle-orm";
+import { eq, and, inArray, sql, gte, desc } from "drizzle-orm";
 
 // Helper to get session
 async function getSession() {
@@ -35,17 +37,17 @@ async function isOwner(userId: string): Promise<boolean> {
   return permissions.some((p) => p.role === "owner");
 }
 
-// Plan limits configuration
+// Plan limits configuration - Updated sesuai PRD
 const planLimits = {
   starter: {
     branches: 1,
     staffPerBranch: 3,
-    ordersPerMonth: 500,
+    ordersPerMonth: 100, // Updated: 100 order/bulan untuk Starter (GRATIS)
   },
   pro: {
     branches: 5,
     staffPerBranch: 10,
-    ordersPerMonth: 2000,
+    ordersPerMonth: Infinity, // Unlimited untuk Pro
   },
   enterprise: {
     branches: Infinity,
@@ -54,11 +56,11 @@ const planLimits = {
   },
 } as const;
 
-// Plan pricing
+// Plan pricing - Updated sesuai PRD
 const planPricing = {
-  starter: 199000,
-  pro: 499000,
-  enterprise: 999000,
+  starter: 0,      // GRATIS
+  pro: 149000,     // Rp 149.000/bulan
+  enterprise: -1,  // Custom pricing
 } as const;
 
 // GET /api/billing - Get billing and subscription info
@@ -209,21 +211,46 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Invoices would come from a payment provider (Mayar) in production
-    // For now, return empty array - this will be populated when payment integration is done
-    const invoices: {
-      id: string;
-      date: string;
-      amount: number;
-      status: "paid" | "pending" | "failed";
-      plan: string;
-    }[] = [];
+    // Get subscription record if exists
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.organizationId, organizationId));
+
+    // Get invoices from database
+    const dbInvoices = await db
+      .select({
+        id: subscriptionInvoices.invoiceNumber,
+        date: subscriptionInvoices.createdAt,
+        amount: subscriptionInvoices.amount,
+        status: subscriptionInvoices.status,
+        plan: subscriptionInvoices.plan,
+      })
+      .from(subscriptionInvoices)
+      .where(eq(subscriptionInvoices.organizationId, organizationId))
+      .orderBy(desc(subscriptionInvoices.createdAt))
+      .limit(10);
+
+    const invoices = dbInvoices.map((inv) => ({
+      id: inv.id,
+      date: inv.date.toISOString(),
+      amount: Number(inv.amount),
+      status: inv.status as "paid" | "pending" | "failed",
+      plan: inv.plan || plan,
+    }));
+
+    // Use subscription data if available, otherwise use organization defaults
+    const subscriptionPrice = subscription 
+      ? Number(subscription.price) 
+      : (planPricing[plan] || 0);
+    
+    const subscriptionStatus = subscription?.status || organization.subscriptionStatus;
 
     return NextResponse.json({
       subscription: {
         plan: organization.plan,
-        status: organization.subscriptionStatus,
-        price: planPricing[plan] || planPricing.starter,
+        status: subscriptionStatus,
+        price: subscriptionPrice,
         nextBillingDate: nextBillingDate.toISOString(),
         daysUntilRenewal,
         trialEndsAt: organization.trialEndsAt?.toISOString() || null,
