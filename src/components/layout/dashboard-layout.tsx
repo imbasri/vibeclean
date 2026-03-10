@@ -35,6 +35,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RoleBadge } from "@/components/common/permission-guard";
+import { SubscriptionBadge } from "@/components/common/subscription-banner";
 import { BranchSwitcher } from "./branch-switcher";
 
 // ============================================
@@ -168,6 +169,11 @@ export function Sidebar({ className }: SidebarProps) {
             );
           })}
         </nav>
+
+        {/* Subscription Badge */}
+        <div className="mt-4 px-1">
+          <SubscriptionBadge />
+        </div>
       </ScrollArea>
 
       {/* User Section */}

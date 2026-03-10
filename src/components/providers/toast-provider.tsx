@@ -1,6 +1,6 @@
 "use client";
 
-import { GooeyToaster } from "goey-toast";
+import { GooeyToaster, gooeyToast } from "goey-toast";
 import "goey-toast/styles.css";
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -9,9 +9,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <GooeyToaster 
         position="top-right"
-        expand={true}
-        richColors
-        preset="smooth"
+        offset="24px"
+        gap={14}
+        duration={4000}
+        closeOnEscape
+        swipeToDismiss
+        theme="light"
       />
     </>
   );

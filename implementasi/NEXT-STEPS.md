@@ -2,6 +2,169 @@
 
 ## Completed This Session (Latest)
 
+### QR Code Payment System ✅
+
+- **QR Code Library**: Installed `qrcode` package for generating real QR codes
+- **QR Code API**: Updated `/api/branches/[id]/qrcode` to generate actual QR codes
+- **Branches UI**: Added QR Code menu item in branch cards
+  - Generate QR in 3 sizes (small/medium/large)
+  - Download QR as PNG
+  - Print QR with branch name
+  - Copy payment URL
+
+- **Public Payment Pages**:
+  - `/pay/[orgSlug]` - List all branches for payment
+  - `/pay/[orgSlug]/[branchId]` - Branch payment form with QRIS
+  - `/api/payments/public/create` - Create payment without auth
+
+- **Branch Limit Enforcement**: Already implemented in `/api/branches`
+- **Transaction Limit Enforcement**: Already implemented in `/api/orders`
+
+---
+
+## Completed This Session
+
+### Transaction Fee System ✅
+
+- **Database Schema**:
+  - Added `platform_settings` table untuk konfigurasi dinamis
+  - Added `transactionFee` field di `orders` table
+
+- **Configuration Library** (`src/lib/config/platform.ts`):
+  - Default settings: 0.5% (min Rp 500, max Rp 1000)
+  - Supports both `percentage` and `fixed` fee types
+  - Dynamic min/max bounds
+  - Preview function untuk calculator
+
+- **Webhook Update** (`/api/webhooks/mayar`):
+  - Automatically calculates fee on payment received
+  - Stores fee di `orders.transactionFee`
+  - Logs fee di status history
+
+- **API Endpoints** (`/api/settings/platform/fees`):
+  - GET - Ambil konfigurasi fee
+  - PUT - Update konfigurasi fee
+  - POST - Preview fee calculation
+
+- **Documentation**: `implementasi/14-TRANSACTION-FEE.md`
+
+**Note**: Run `npm run db:push` untuk create tabel baru.
+
+---
+
+## Previously Completed
+
+### Coupons & Membership System ✅
+
+- **Database Schema**: Added new tables
+  - `coupons` - Coupon definitions (percentage/fixed, min order, usage limits)
+  - `coupon_usages` - Redemption tracking
+  - `membership_tiers` - Bronze/Silver/Gold/Platinum tiers
+  - `customer_memberships` - Customer membership tracking
+  - `orders` - Added `couponCode` field
+
+- **API Endpoints**:
+  - `GET /api/coupons` - List all coupons
+  - `POST /api/coupons` - Create coupon
+  - `PUT /api/coupons` - Update coupon
+  - `DELETE /api/coupons` - Delete coupon
+  - `POST /api/coupons/apply` - Validate and calculate discount
+
+- **POS Integration**:
+  - Added coupon input field in cart
+  - Apply/remove coupon functionality
+  - Shows applied coupon with discount
+  - Passes coupon code to order
+
+- **Validation Schema**: Added `couponCode` to `createOrderSchema`
+
+**Note**: Run `npm run db:push` to create the new tables.
+
+---
+
+## Previously Completed
+
+### QR Code Payment System ✅
+
+- **QR Code Library**: Installed `qrcode` package for generating real QR codes
+- **QR Code API**: Updated `/api/branches/[id]/qrcode` to generate actual QR codes
+- **Branches UI**: Added QR Code menu item in branch cards
+  - Generate QR in 3 sizes (small/medium/large)
+  - Download QR as PNG
+  - Print QR with branch name
+  - Copy payment URL
+
+- **Public Payment Pages**:
+  - `/pay/[orgSlug]` - List all branches for payment
+  - `/pay/[orgSlug]/[branchId]` - Branch payment form with QRIS
+  - `/api/payments/public/create` - Create payment without auth
+
+- **Branch Limit Enforcement**: Already implemented in `/api/branches`
+- **Transaction Limit Enforcement**: Already implemented in `/api/orders`
+
+### Withdrawal/Settlement System ✅
+
+- **Database Schema**: Added `withdrawals` table to schema
+  - Tracks withdrawal requests, amounts, fees
+  - Bank details storage
+  - Status tracking (pending/processing/completed/rejected)
+  
+- **API Endpoints**:
+  - `GET /api/withdrawals` - Get balance and withdrawal history
+  - `POST /api/withdrawals` - Create withdrawal request
+  
+- **Features**:
+  - Minimum withdrawal: Rp 50,000
+  - Fee: Rp 5,000 - Rp 10,000 (or 1% whichever is higher)
+  - Only one pending withdrawal at a time
+  - Owner-only access
+
+**Note**: Run `npm run db:push` to create the withdrawals table in the database.
+
+---
+
+## Previously Completed
+
+### Subscription & Payment System (Mayar Integration) ✅
+
+- **Mayar Payment API**: Subscription billing already integrated
+  - `/api/billing/subscribe` - Create subscription with Mayar invoice
+  - `/api/payments/create` - Create QRIS payment for orders
+  - `/api/payments/status` - Check payment status
+  - `/api/webhooks/mayar` - Handle payment confirmations
+
+- **Webhook Handler**: 
+  - Handles `payment.received` events
+  - Updates order to PAID status automatically
+  - Activates subscription when payment confirmed
+  - Records transaction history
+
+- **QR Code Generation**:
+  - Created `/api/branches/[id]/qrcode` endpoint
+  - Generates payment QR codes for branches
+  - Supports custom amount and size options
+  - Placeholder QR pattern (needs real QR library for production)
+
+### Branch Limit Enforcement ✅
+
+- Added branch limit check in `/api/branches` POST:
+  - Starter plan: Max 1 branch
+  - Pro plan: Max 5 branches
+  - Enterprise: Unlimited branches
+- Returns helpful error message with upgrade suggestion
+
+### Transaction Limit Enforcement ✅
+
+- Already implemented in `/api/orders`:
+  - Starter plan: Max 100 orders/month
+  - Pro plan: Unlimited orders
+  - Enterprise: Unlimited orders
+- Returns error when limit exceeded
+
+---
+
+## Previously Completed
+
 ### Receipt Printing ✅
 
 - Created `src/components/pos/receipt-print.tsx`

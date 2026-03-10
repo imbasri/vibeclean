@@ -9,6 +9,7 @@ import {
   uuid,
   index,
   uniqueIndex,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -409,6 +410,7 @@ export const orders = pgTable(
       .default("0"),
     discountType: text("discount_type"), // 'percentage' | 'fixed'
     discountReason: text("discount_reason"),
+    couponCode: text("coupon_code"),
     total: decimal("total", { precision: 15, scale: 2 }).notNull(),
     status: orderStatusEnum("status").notNull().default("pending"),
     paymentStatus: paymentStatusEnum("payment_status")
@@ -416,6 +418,10 @@ export const orders = pgTable(
       .default("unpaid"),
     paymentMethod: paymentMethodEnum("payment_method"),
     paidAmount: decimal("paid_amount", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    // Transaction Fee (VibeClean founder's revenue per transaction)
+    transactionFee: decimal("transaction_fee", { precision: 15, scale: 2 })
       .notNull()
       .default("0"),
     // Mayar Payment Integration Fields
@@ -755,3 +761,283 @@ export const subscriptionInvoicesRelations = relations(subscriptionInvoices, ({ 
     references: [organizations.id],
   }),
 }));
+
+// ============================================
+// WITHDRAWAL STATUS ENUM
+// ============================================
+
+const withdrawalStatusEnum = pgEnum("withdrawal_status", [
+  "pending",
+  "processing",
+  "completed",
+  "rejected",
+  "cancelled",
+]);
+
+// ============================================
+// WITHDRAWALS (Settlement Requests)
+// ============================================
+
+export const withdrawals = pgTable(
+  "withdrawals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+    fee: decimal("fee", { precision: 15, scale: 2 }).notNull().default("0"),
+    netAmount: decimal("net_amount", { precision: 15, scale: 2 }).notNull(),
+    status: withdrawalStatusEnum("status").notNull().default("pending"),
+    // Bank details
+    bankName: text("bank_name").notNull(),
+    bankAccountNumber: text("bank_account_number").notNull(),
+    bankAccountName: text("bank_account_name").notNull(),
+    // Mayar integration (if using Mayar for disbursement)
+    mayarWithdrawalId: text("mayar_withdrawal_id"),
+    mayarWithdrawalStatus: text("mayar_withdrawal_status"),
+    // Notes
+    notes: text("notes"),
+    rejectedReason: text("rejected_reason"),
+    // Timestamps
+    requestedAt: timestamp("requested_at").notNull().defaultNow(),
+    processedAt: timestamp("processed_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("withdrawals_organization_id_idx").on(table.organizationId),
+    index("withdrawals_status_idx").on(table.status),
+  ]
+);
+
+// ============================================
+// WITHDRAWAL RELATIONS
+// ============================================
+
+export const withdrawalsRelations = relations(withdrawals, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [withdrawals.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+// ============================================
+// COUPON TYPE ENUM
+// ============================================
+
+const couponTypeEnum = pgEnum("coupon_type", [
+  "percentage",  // Percentage discount
+  "fixed",       // Fixed amount discount
+]);
+
+const couponScopeEnum = pgEnum("coupon_scope", [
+  "all",         // All services
+  "category",    // Specific category
+  "service",     // Specific service
+]);
+
+// ============================================
+// COUPONS
+// ============================================
+
+export const coupons = pgTable(
+  "coupons",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    description: text("description"),
+    type: couponTypeEnum("type").notNull(),
+    value: decimal("value", { precision: 10, scale: 2 }).notNull(), // Percentage or fixed amount
+    scope: couponScopeEnum("scope").notNull().default("all"),
+    // Scope specific (for category or service specific)
+    category: text("category"), // Service category
+    serviceId: uuid("service_id"), // Specific service ID
+    // Limits
+    minOrderAmount: decimal("min_order_amount", { precision: 15, scale: 2 }),
+    maxDiscount: decimal("max_discount", { precision: 15, scale: 2 }), // For percentage coupons
+    usageLimit: integer("usage_limit"), // Total uses allowed
+    usageCount: integer("usage_count").notNull().default(0),
+    perUserLimit: integer("per_user_limit").default(1),
+    // Date limits
+    validFrom: timestamp("valid_from"),
+    validUntil: timestamp("valid_until"),
+    // Status
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("coupons_organization_id_idx").on(table.organizationId),
+    index("coupons_code_idx").on(table.code),
+  ]
+);
+
+// ============================================
+// COUPON USAGE (Redemption tracking)
+// ============================================
+
+export const couponUsages = pgTable(
+  "coupon_usages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    couponId: uuid("coupon_id")
+      .notNull()
+      .references(() => coupons.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(), // Customer user ID (if logged in)
+    customerPhone: text("customer_phone").notNull(),
+    discountAmount: decimal("discount_amount", { precision: 15, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("coupon_usages_coupon_id_idx").on(table.couponId),
+    index("coupon_usages_order_id_idx").on(table.orderId),
+  ]
+);
+
+// ============================================
+// MEMBERSHIP TIERS
+// ============================================
+
+const membershipTierEnum = pgEnum("membership_tier", [
+  "bronze",
+  "silver",
+  "gold",
+  "platinum",
+]);
+
+export const membershipTiers = pgTable(
+  "membership_tiers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // Bronze, Silver, Gold, Platinum
+    tier: membershipTierEnum("tier").notNull().unique(),
+    minSpending: decimal("min_spending", { precision: 15, scale: 2 }).notNull().default("0"),
+    discountPercentage: decimal("discount_percentage", { precision: 5, scale: 2 }).notNull().default("0"),
+    pointMultiplier: decimal("point_multiplier", { precision: 5, scale: 2 }).notNull().default("1"), // 1x, 2x, etc.
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("membership_tiers_organization_id_idx").on(table.organizationId),
+    index("membership_tiers_tier_idx").on(table.tier),
+  ]
+);
+
+// ============================================
+// CUSTOMER MEMBERSHIP
+// ============================================
+
+export const customerMemberships = pgTable(
+  "customer_memberships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    tierId: uuid("tier_id")
+      .notNull()
+      .references(() => membershipTiers.id, { onDelete: "cascade" }),
+    points: decimal("points", { precision: 15, scale: 2 }).notNull().default("0"),
+    totalSpent: decimal("total_spent", { precision: 15, scale: 2 }).notNull().default("0"),
+    totalOrders: integer("total_orders").notNull().default(0),
+    joinedAt: timestamp("joined_at").notNull().defaultNow(),
+    currentPeriodStart: timestamp("current_period_start").notNull().defaultNow(),
+    currentPeriodEnd: timestamp("current_period_end"), // For tier expiration
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("customer_memberships_customer_id_idx").on(table.customerId),
+    index("customer_memberships_tier_id_idx").on(table.tierId),
+  ]
+);
+
+// ============================================
+// COUPON RELATIONS
+// ============================================
+
+export const couponsRelations = relations(coupons, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [coupons.organizationId],
+    references: [organizations.id],
+  }),
+  usages: many(couponUsages),
+}));
+
+export const couponUsagesRelations = relations(couponUsages, ({ one }) => ({
+  coupon: one(coupons, {
+    fields: [couponUsages.couponId],
+    references: [coupons.id],
+  }),
+  order: one(orders, {
+    fields: [couponUsages.orderId],
+    references: [orders.id],
+  }),
+}));
+
+// ============================================
+// MEMBERSHIP RELATIONS
+// ============================================
+
+export const membershipTiersRelations = relations(membershipTiers, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [membershipTiers.organizationId],
+    references: [organizations.id],
+  }),
+  memberships: many(customerMemberships),
+}));
+
+export const customerMembershipsRelations = relations(customerMemberships, ({ one }) => ({
+  customer: one(customers, {
+    fields: [customerMemberships.customerId],
+    references: [customers.id],
+  }),
+  tier: one(membershipTiers, {
+    fields: [customerMemberships.tierId],
+    references: [membershipTiers.id],
+  }),
+}));
+
+// ============================================
+// TRANSACTION FEE TYPE ENUM
+// ============================================
+
+const transactionFeeTypeEnum = pgEnum("transaction_fee_type", [
+  "fixed",       // Fixed amount per transaction
+  "percentage",  // Percentage of transaction amount
+]);
+
+// ============================================
+// PLATFORM TRANSACTION FEE SETTINGS
+// ============================================
+
+export const platformSettings = pgTable(
+  "platform_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    key: text("key").notNull().unique(),
+    value: jsonb("value").notNull(),
+    description: text("description"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("platform_settings_key_idx").on(table.key),
+  ]
+);
+
+// ============================================
+// PLATFORM SETTINGS RELATIONS
+// ============================================
+
+export const platformSettingsRelations = relations(platformSettings, ({ one }) => ({}));

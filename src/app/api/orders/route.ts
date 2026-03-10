@@ -10,8 +10,11 @@ import {
   customers,
   organizationMembers,
   branchPermissions,
+  organizations,
+  branches,
+  subscriptions,
 } from "@/lib/db";
-import { eq, and, inArray, desc, or, ilike, sql } from "drizzle-orm";
+import { eq, and, inArray, desc, or, ilike, sql, gte } from "drizzle-orm";
 import { createOrderSchema } from "@/lib/validations/schemas";
 
 // Helper to get session
@@ -46,6 +49,182 @@ function generateOrderNumber(): string {
   const day = String(now.getDate()).padStart(2, "0");
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `ORD-${year}${month}${day}-${random}`;
+}
+
+// Plan limits configuration
+const planLimits = {
+  starter: { ordersPerMonth: 100 },
+  pro: { ordersPerMonth: Infinity },
+  enterprise: { ordersPerMonth: Infinity },
+} as const;
+
+// Helper to check subscription order limit
+async function checkOrderLimit(branchId: string): Promise<{
+  allowed: boolean;
+  message?: string;
+  currentCount?: number;
+  limit?: number | "Unlimited";
+}> {
+  try {
+    // Get branch's organization
+    const [branch] = await db
+      .select({ organizationId: branches.organizationId })
+      .from(branches)
+      .where(eq(branches.id, branchId));
+
+    if (!branch) {
+      return { allowed: true }; // Fail open
+    }
+
+    // Get organization and subscription
+    const [organization] = await db
+      .select({
+        id: organizations.id,
+        plan: organizations.plan,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, branch.organizationId));
+
+    if (!organization) {
+      return { allowed: true };
+    }
+
+    const plan = organization.plan as keyof typeof planLimits;
+    const limits = planLimits[plan] || planLimits.starter;
+
+    // Unlimited plans always allowed
+    if (limits.ordersPerMonth === Infinity) {
+      return { allowed: true, limit: "Unlimited" };
+    }
+
+    // Get subscription for accurate count
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.organizationId, organization.id));
+
+    // Get all branches for this organization
+    const orgBranches = await db
+      .select({ id: branches.id })
+      .from(branches)
+      .where(eq(branches.organizationId, organization.id));
+
+    const branchIds = orgBranches.map((b) => b.id);
+
+    // Count orders this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    let ordersThisMonth = 0;
+    if (branchIds.length > 0) {
+      const [orderCount] = await db
+        .select({
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(orders)
+        .where(
+          and(
+            inArray(orders.branchId, branchIds),
+            gte(orders.createdAt, startOfMonth)
+          )
+        );
+      ordersThisMonth = orderCount?.count || 0;
+    }
+
+    // Use subscription's count if available (more accurate)
+    const currentCount = subscription?.monthlyOrderCount || ordersThisMonth;
+
+    if (currentCount >= limits.ordersPerMonth) {
+      return {
+        allowed: false,
+        message: `Kuota transaksi bulan ini sudah habis (${currentCount}/${limits.ordersPerMonth}). Upgrade ke paket Pro untuk transaksi unlimited.`,
+        currentCount,
+        limit: limits.ordersPerMonth,
+      };
+    }
+
+    return {
+      allowed: true,
+      currentCount,
+      limit: limits.ordersPerMonth,
+    };
+  } catch (error) {
+    console.error("Error checking order limit:", error);
+    return { allowed: true }; // Fail open on error
+  }
+}
+
+// Helper to increment order count in subscription
+async function incrementSubscriptionOrderCount(branchId: string): Promise<void> {
+  try {
+    const [branch] = await db
+      .select({ organizationId: branches.organizationId })
+      .from(branches)
+      .where(eq(branches.id, branchId));
+
+    if (!branch) return;
+
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.organizationId, branch.organizationId));
+
+    if (!subscription) {
+      // Create subscription record if doesn't exist
+      const [organization] = await db
+        .select({ plan: organizations.plan, subscriptionStatus: organizations.subscriptionStatus })
+        .from(organizations)
+        .where(eq(organizations.id, branch.organizationId));
+
+      if (organization) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        await db.insert(subscriptions).values({
+          organizationId: branch.organizationId,
+          plan: organization.plan,
+          status: organization.subscriptionStatus as "active" | "trial" | "expired" | "cancelled",
+          price: "0",
+          billingCycle: "monthly",
+          monthlyOrderCount: 1,
+          lastOrderCountReset: startOfMonth,
+        });
+      }
+      return;
+    }
+
+    // Check if we need to reset monthly count
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const lastReset = subscription.lastOrderCountReset || new Date(0);
+    const shouldReset = lastReset < startOfMonth;
+
+    if (shouldReset) {
+      await db
+        .update(subscriptions)
+        .set({
+          monthlyOrderCount: 1,
+          lastOrderCountReset: startOfMonth,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptions.id, subscription.id));
+    } else {
+      await db
+        .update(subscriptions)
+        .set({
+          monthlyOrderCount: (subscription.monthlyOrderCount || 0) + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptions.id, subscription.id));
+    }
+  } catch (error) {
+    console.error("Error incrementing subscription order count:", error);
+    // Don't fail the order creation if this fails
+  }
 }
 
 // GET /api/orders - List orders for user's branches
@@ -195,6 +374,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check subscription order limit
+    const limitCheck = await checkOrderLimit(branchId);
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: limitCheck.message || "Kuota transaksi habis",
+          code: "ORDER_LIMIT_REACHED",
+          currentCount: limitCheck.currentCount,
+          limit: limitCheck.limit,
+        },
+        { status: 403 }
+      );
+    }
+
     // Fetch services to get prices and validate
     const serviceIds = validData.items.map((item) => item.serviceId);
     const fetchedServices = await db
@@ -290,6 +483,7 @@ export async function POST(request: NextRequest) {
           discount: String(discountAmount),
           discountType: validData.discountType || null,
           discountReason: validData.discountReason || null,
+          couponCode: validData.couponCode || null,
           total: String(total),
           status: "pending",
           paymentStatus: "unpaid",
@@ -334,6 +528,11 @@ export async function POST(request: NextRequest) {
       }
 
       return { order: newOrder, items: insertedItems };
+    });
+
+    // Increment subscription order count (non-blocking)
+    incrementSubscriptionOrderCount(branchId).catch((err) => {
+      console.error("Failed to increment order count:", err);
     });
 
     // Convert decimal strings to numbers for response

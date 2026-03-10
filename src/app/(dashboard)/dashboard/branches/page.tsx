@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence, type Variants, type Easing } from "framer-motion";
 import {
   Plus,
@@ -21,6 +21,10 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  QrCode,
+  Download,
+  Printer,
+  Copy,
 } from "lucide-react";
 import { gooeyToast } from "goey-toast";
 
@@ -103,9 +107,18 @@ export default function BranchesPage() {
   // Modal states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isQRDialogOpen, setIsQRDialogOpen] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const [selectedBranchName, setSelectedBranchName] = useState<string>("");
   const [formData, setFormData] = useState<BranchFormData>(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // QR Code state
+  const [qrCodeData, setQRCodeData] = useState<{
+    qrCode: string;
+    paymentUrl: string;
+  } | null>(null);
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
 
   // Filter branches
   const filteredBranches = branches.filter((branch) =>
@@ -199,6 +212,59 @@ export default function BranchesPage() {
       isActive: branch.isActive,
     });
     setIsEditDialogOpen(true);
+  };
+
+  const openQRDialog = (branch: typeof branches[0]) => {
+    setSelectedBranchId(branch.id);
+    setSelectedBranchName(branch.name);
+    setQRCodeData(null);
+    setIsQRDialogOpen(true);
+  };
+
+  const generateQRCode = async (size: "small" | "medium" | "large" = "medium") => {
+    if (!selectedBranchId) return;
+    
+    setIsGeneratingQR(true);
+    try {
+      const response = await fetch(`/api/branches/${selectedBranchId}/qrcode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setQRCodeData({
+          qrCode: data.qrCode,
+          paymentUrl: data.paymentUrl,
+        });
+      } else {
+        gooeyToast.error("Gagal", { description: data.error || "Gagal generate QR" });
+      }
+    } catch (err) {
+      gooeyToast.error("Gagal", { description: "Gagal generate QR code" });
+    } finally {
+      setIsGeneratingQR(false);
+    }
+  };
+
+  const copyPaymentUrl = () => {
+    if (qrCodeData?.paymentUrl) {
+      navigator.clipboard.writeText(qrCodeData.paymentUrl);
+      gooeyToast.success("Disalin", { description: "Link pembayaran disalin" });
+    }
+  };
+
+  const downloadQR = () => {
+    if (!qrCodeData?.qrCode) return;
+    
+    const link = document.createElement("a");
+    link.href = qrCodeData.qrCode;
+    link.download = `qr-code-${selectedBranchName.replace(/\s+/g, "-").toLowerCase()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Loading state
@@ -398,6 +464,10 @@ export default function BranchesPage() {
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => openQRDialog(branch)}>
+                            <QrCode className="h-4 w-4 mr-2" />
+                            QR Code Pembayaran
+                          </DropdownMenuItem>
                           <DropdownMenuItem>
                             <Settings className="h-4 w-4 mr-2" />
                             Pengaturan Cabang
@@ -597,6 +667,139 @@ export default function BranchesPage() {
                 )}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* QR Code Dialog */}
+        <Dialog open={isQRDialogOpen} onOpenChange={setIsQRDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <QrCode className="h-5 w-5" />
+                QR Code Pembayaran
+              </DialogTitle>
+              <DialogDescription>
+                {selectedBranchName} - Pelanggan dapat scan untuk melakukan pembayaran
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {/* Size Selection */}
+              {!qrCodeData && (
+                <div className="space-y-2">
+                  <Label>Pilih Ukuran</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => generateQRCode("small")}
+                      disabled={isGeneratingQR}
+                      className="flex flex-col h-auto py-3"
+                    >
+                      <span className="text-xs">Kecil</span>
+                      <span className="text-[10px] text-gray-500">200px</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => generateQRCode("medium")}
+                      disabled={isGeneratingQR}
+                      className="flex flex-col h-auto py-3"
+                    >
+                      <span className="text-xs">Sedang</span>
+                      <span className="text-[10px] text-gray-500">300px</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => generateQRCode("large")}
+                      disabled={isGeneratingQR}
+                      className="flex flex-col h-auto py-3"
+                    >
+                      <span className="text-xs">Besar</span>
+                      <span className="text-[10px] text-gray-500">400px</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {isGeneratingQR && (
+                <div className="flex flex-col items-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <p className="text-sm text-gray-500 mt-2">Membuat QR Code...</p>
+                </div>
+              )}
+
+              {/* QR Code Display */}
+              {qrCodeData && !isGeneratingQR && (
+                <div className="space-y-4">
+                  <div className="flex justify-center p-4 bg-white rounded-lg border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={qrCodeData.qrCode} 
+                      alt="QR Code Pembayaran" 
+                      className="w-48 h-48"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Link Pembayaran</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        value={qrCodeData.paymentUrl} 
+                        readOnly 
+                        className="text-xs"
+                      />
+                      <Button variant="outline" size="icon" onClick={copyPaymentUrl}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={downloadQR} className="flex-1">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        const printWindow = window.open("", "_blank");
+                        if (printWindow) {
+                          printWindow.document.write(`
+                            <html>
+                              <head>
+                                <title>QR Code - ${selectedBranchName}</title>
+                                <style>
+                                  body { display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+                                  img { max-width: 300px; }
+                                  .label { text-align: center; margin-top: 20px; font-family: sans-serif; }
+                                </style>
+                              </head>
+                              <body>
+                                <img src="${qrCodeData.qrCode}" />
+                                <div class="label">
+                                  <h2>${selectedBranchName}</h2>
+                                  <p>Scan untuk membayar</p>
+                                </div>
+                              </body>
+                            </html>
+                          `);
+                          printWindow.document.close();
+                          printWindow.print();
+                        }
+                      }} 
+                      className="flex-1"
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print
+                    </Button>
+                    <Button onClick={() => generateQRCode("medium")} className="flex-1">
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       </div>

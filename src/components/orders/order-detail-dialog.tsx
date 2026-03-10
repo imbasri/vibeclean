@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Order, OrderStatus, PaymentStatus, PaymentMethod } from "@/types";
-import { toast } from "sonner";
+import { gooeyToast } from "goey-toast";
 
 interface OrderDetailDialogProps {
   open: boolean;
@@ -113,7 +113,7 @@ export function OrderDetailDialog({
   const copyPaymentUrl = () => {
     if (order.paymentUrl) {
       navigator.clipboard.writeText(order.paymentUrl);
-      toast.success("Link pembayaran disalin!");
+      gooeyToast.success("Link pembayaran disalin!");
     }
   };
 

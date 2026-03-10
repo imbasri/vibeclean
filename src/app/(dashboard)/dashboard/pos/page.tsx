@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/auth-context";
-import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { openReceiptWindow } from "@/components/pos/receipt-print";
 import { PaymentQRISDialog } from "@/components/pos/payment-qris-dialog";
@@ -41,6 +40,21 @@ import { useServices } from "@/hooks/use-services";
 import { useOrders } from "@/hooks/use-orders";
 import { gooeyToast } from "goey-toast";
 import type { LaundryService, PaymentMethod, ServiceCategory } from "@/types";
+
+// Helper function for toast notifications
+const showToast = (
+  type: "success" | "error" | "warning",
+  message: string,
+  options?: { description?: string }
+) => {
+  if (type === "error") {
+    gooeyToast.error(message, { description: options?.description });
+  } else if (type === "warning") {
+    gooeyToast.warning(message, { description: options?.description });
+  } else {
+    gooeyToast.success(message, { description: options?.description });
+  }
+};
 
 // ============================================
 // TYPES & SCHEMAS
@@ -248,6 +262,15 @@ export default function POSPage() {
   const [activeCategory, setActiveCategory] = useState<ServiceCategory | "all">("all");
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    type: "percentage" | "fixed";
+    value: number;
+    discount: number;
+  } | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [showCheckoutDialog, setShowCheckoutDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -331,10 +354,56 @@ export default function POSPage() {
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.service.price * item.quantity, 0);
-  const discountAmount = discountType === "percentage" 
+  const manualDiscountAmount = discountType === "percentage" 
     ? (subtotal * discount) / 100 
     : discount;
-  const total = Math.max(0, subtotal - discountAmount);
+  const couponDiscountAmount = appliedCoupon?.discount || 0;
+  const totalDiscount = manualDiscountAmount + couponDiscountAmount;
+  const total = Math.max(0, subtotal - totalDiscount);
+
+  // Apply coupon handler
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim() || subtotal === 0) return;
+    
+    setIsApplyingCoupon(true);
+    setCouponError(null);
+    
+    try {
+      const response = await fetch("/api/coupons/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: couponCode,
+          orderAmount: subtotal,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setCouponError(data.error || "Kupon tidak valid");
+        return;
+      }
+      
+      setAppliedCoupon({
+        code: data.coupon.code,
+        type: data.coupon.type,
+        value: data.coupon.value,
+        discount: data.discount,
+      });
+    } catch (err) {
+      setCouponError("Gagal menerapkan kupon");
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  // Remove coupon
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError(null);
+  };
 
   // Cart handlers
   const addToCart = (service: LaundryService) => {
@@ -371,6 +440,9 @@ export default function POSPage() {
     setCart([]);
     reset({ customerName: "", customerPhone: "" });
     setDiscount(0);
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError(null);
     setPaymentMethod(null);
   };
 
@@ -396,7 +468,8 @@ export default function POSPage() {
           notes: item.notes,
         })),
         discount: discount > 0 ? discount : undefined,
-        discountType: discount > 0 ? discountType : undefined,
+        discountType: discount > 0 ? discountType : (appliedCoupon ? "fixed" : undefined),
+        couponCode: appliedCoupon?.code,
         paymentMethod,
       };
 
@@ -418,8 +491,8 @@ export default function POSPage() {
             subtotal: item.service.price * item.quantity,
           })),
           subtotal: subtotal,
-          discount: discountAmount,
-          discountType: discount > 0 ? discountType : undefined,
+          discount: totalDiscount,
+          discountType: discount > 0 ? discountType : (appliedCoupon ? "fixed" : undefined),
           total: total,
           paymentMethod: paymentMethod || "cash",
           estimatedCompletionAt: new Date(newOrder.estimatedCompletionAt),
@@ -441,11 +514,11 @@ export default function POSPage() {
             customerName: customerName,
           });
           setShowPaymentDialog(true);
-          gooeyToast.success("Order dibuat! Silakan scan QR untuk pembayaran.");
+          showToast("success", "Order dibuat! Silakan scan QR untuk pembayaran.");
         } else {
           // Cash or E-Wallet (manual) - show success immediately
           setShowSuccessDialog(true);
-          gooeyToast.success("Order berhasil dibuat!");
+          showToast("success", "Order berhasil dibuat!");
         }
         
         // Send WhatsApp notification (fire and forget - don't block UI)
@@ -453,7 +526,7 @@ export default function POSPage() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal membuat order";
-      gooeyToast.error(message);
+      showToast("error", message);
       console.error("Checkout error:", err);
     } finally {
       setIsProcessing(false);
@@ -506,13 +579,13 @@ Terima kasih! 🙏`;
     setShowPaymentDialog(false);
     setPendingPaymentOrder(null);
     setShowSuccessDialog(true);
-    gooeyToast.success("Pembayaran berhasil diterima!");
+    showToast("success", "Pembayaran berhasil diterima!");
   };
   
   // Handle payment expired callback from QRIS dialog
   const handlePaymentExpired = () => {
     // User can retry or close - dialog handles this
-    gooeyToast.warning("Waktu pembayaran habis. Silakan buat pembayaran baru.");
+    showToast("warning", "Waktu pembayaran habis. Silakan buat pembayaran baru.");
   };
   
   // Handle payment dialog close (user chose "Bayar Nanti")
@@ -573,15 +646,15 @@ Terima kasih! 🙏`;
   }
 
   return (
-    <DashboardLayout title="Kasir (POS)">
-      <PermissionGuard 
-        feature="pos"
-        fallback={
-          <div className="flex items-center justify-center h-96">
-            <p className="text-gray-500">Anda tidak memiliki akses ke halaman ini</p>
-          </div>
-        }
-      >
+    <PermissionGuard 
+      feature="pos"
+      fallback={
+        <div className="flex items-center justify-center h-96">
+          <p className="text-gray-500">Anda tidak memiliki akses ke halaman ini</p>
+        </div>
+      }
+    >
+      <>
         <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-12rem)]">
           {/* Left: Service Selection */}
           <div className="flex-1 flex flex-col min-h-0 lg:min-h-full">
@@ -752,16 +825,66 @@ Terima kasih! 🙏`;
                 </div>
               </PermissionGuard>
 
+              {/* Coupon Input */}
+              {cart.length > 0 && !appliedCoupon && (
+                <div className="w-full space-y-2">
+                  <Label className="text-xs text-gray-500">Kupon Diskon</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Masukkan kode kupon"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleApplyCoupon}
+                      disabled={isApplyingCoupon || !couponCode.trim()}
+                    >
+                      {isApplyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : "Pakai"}
+                    </Button>
+                  </div>
+                  {couponError && (
+                    <p className="text-xs text-red-500">{couponError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Applied Coupon Display */}
+              {appliedCoupon && (
+                <div className="w-full p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                        🎫 {appliedCoupon.code}
+                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-500">
+                        -{formatCurrency(appliedCoupon.discount)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveCoupon}
+                      className="text-green-700 hover:text-green-900"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Totals */}
               <div className="w-full space-y-1 text-sm">
                 <div className="flex justify-between text-gray-500">
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                {discountAmount > 0 && (
+                {totalDiscount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Diskon</span>
-                    <span>-{formatCurrency(discountAmount)}</span>
+                    <span>-{formatCurrency(totalDiscount)}</span>
                   </div>
                 )}
                 <Separator />
@@ -900,7 +1023,7 @@ Terima kasih! 🙏`;
             onPaymentExpired={handlePaymentExpired}
           />
         )}
-      </PermissionGuard>
-    </DashboardLayout>
+      </>
+    </PermissionGuard>
   );
 }

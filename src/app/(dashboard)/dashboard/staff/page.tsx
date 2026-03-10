@@ -17,7 +17,6 @@ import {
 import { gooeyToast } from "goey-toast";
 
 import { useAuth } from "@/contexts/auth-context";
-import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { PermissionGuard, RoleBadge } from "@/components/common/permission-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -526,34 +525,30 @@ export default function StaffPage() {
   // Loading state
   if (isLoading) {
     return (
-      <DashboardLayout title="Manajemen Karyawan">
-        <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-          <p className="text-gray-500">Memuat data karyawan...</p>
-        </div>
-      </DashboardLayout>
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-gray-500">Memuat data karyawan...</p>
+      </div>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <DashboardLayout title="Manajemen Karyawan">
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Gagal Memuat Data</h2>
-          <p className="text-gray-500 mb-4">{error}</p>
-          <Button onClick={() => refetch()} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Coba Lagi
-          </Button>
-        </div>
-      </DashboardLayout>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Gagal Memuat Data</h2>
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Button onClick={() => refetch()} variant="outline">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Coba Lagi
+        </Button>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout title="Manajemen Karyawan">
+    <>
       <PermissionGuard
         feature="staff"
         fallback={
@@ -677,6 +672,6 @@ export default function StaffPage() {
           onInvite={handleInvite}
         />
       </PermissionGuard>
-    </DashboardLayout>
+    </>
   );
 }

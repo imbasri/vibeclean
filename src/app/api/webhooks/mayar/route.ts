@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, orders, orderStatusHistory, subscriptions, subscriptionInvoices, organizations } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { verifyWebhookSignature, parseWebhookPayload } from "@/lib/mayar";
+import { calculateTransactionFee, getTransactionFeeSettings } from "@/lib/config/platform";
 
 // Note: Next.js App Router handles raw body natively via request.text()
 // No special config needed
@@ -200,6 +201,7 @@ async function updateOrderToPaid(
   }
 
   const paidAt = new Date(data.updatedAt || new Date().toISOString());
+  const grossAmount = data.amount;
   const nettAmount = data.nettAmount || data.amount;
   
   // Map Mayar payment method to our enum
@@ -211,6 +213,12 @@ async function updateOrderToPaid(
     else if (method.includes("ovo") || method.includes("gopay") || method.includes("dana") || method.includes("wallet")) paymentMethod = "ewallet";
   }
 
+  // Calculate transaction fee for VibeClean founder
+  const feeSettings = await getTransactionFeeSettings();
+  const transactionFee = calculateTransactionFee(grossAmount, feeSettings);
+
+  console.log(`[Mayar Webhook] Transaction fee for order ${order.orderNumber}: Rp ${transactionFee} (type: ${feeSettings.feeType}, value: ${feeSettings.feeValue}%)`);
+
   // Update order
   await db.transaction(async (tx) => {
     await tx
@@ -219,6 +227,7 @@ async function updateOrderToPaid(
         paymentStatus: "paid",
         paymentMethod,
         paidAmount: String(nettAmount),
+        transactionFee: String(transactionFee),
         paidAt,
         updatedAt: new Date(),
       })
@@ -231,11 +240,11 @@ async function updateOrderToPaid(
       fromStatus: order.status,
       toStatus: order.status, // Status doesn't change, only payment status
       changedBy: order.createdBy, // Use order creator as system fallback
-      notes: `Pembayaran diterima via ${data.paymentMethod || "Mayar"} - Rp ${nettAmount.toLocaleString("id-ID")}`,
+      notes: `Pembayaran diterima via ${data.paymentMethod || "Mayar"} - Rp ${nettAmount.toLocaleString("id-ID")} (fee: Rp ${transactionFee})`,
     });
   });
 
-  console.log(`[Mayar Webhook] Order ${order.orderNumber} marked as PAID`);
+  console.log(`[Mayar Webhook] Order ${order.orderNumber} marked as PAID with transaction fee Rp ${transactionFee}`);
 }
 
 /**

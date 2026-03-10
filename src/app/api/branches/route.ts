@@ -8,8 +8,16 @@ import {
   organizationMembers,
   branchPermissions,
   orders,
+  subscriptions,
 } from "@/lib/db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
+
+// Plan limits configuration
+const planLimits = {
+  starter: { branches: 1 },
+  pro: { branches: 5 },
+  enterprise: { branches: Infinity },
+} as const;
 
 // Helper to get session
 async function getSession() {
@@ -210,6 +218,46 @@ export async function POST(request: NextRequest) {
         { error: "Nama, alamat, dan telepon wajib diisi" },
         { status: 400 }
       );
+    }
+
+    // Check branch limit based on subscription plan
+    const [organization] = await db
+      .select({
+        id: organizations.id,
+        plan: organizations.plan,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId));
+
+    if (organization) {
+      const plan = organization.plan as keyof typeof planLimits;
+      const limits = planLimits[plan] || planLimits.starter;
+
+      if (limits.branches !== Infinity) {
+        // Count current branches
+        const [branchCount] = await db
+          .select({
+            count: sql<number>`COUNT(*)::int`,
+          })
+          .from(branches)
+          .where(eq(branches.organizationId, organizationId));
+
+        const currentBranches = branchCount?.count || 0;
+
+        if (currentBranches >= limits.branches) {
+          const planName = plan === "starter" ? "Starter" : "Pro";
+          return NextResponse.json(
+            {
+              error: `Limit cabang tercapai`,
+              message: `Paket ${planName} hanya boleh memiliki ${limits.branches} cabang. Upgrade ke paket Pro untuk menambahkan lebih banyak cabang.`,
+              currentBranches,
+              limit: limits.branches,
+              plan,
+            },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     // Create the branch

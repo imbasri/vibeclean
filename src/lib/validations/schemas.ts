@@ -181,6 +181,7 @@ export const createOrderSchema = z.object({
   discount: z.number().min(0, "Diskon tidak boleh negatif").optional(),
   discountType: z.enum(["percentage", "fixed"]).optional(),
   discountReason: z.string().optional(),
+  couponCode: z.string().optional(),
   paymentMethod: z.enum(paymentMethods).optional(),
   notes: z.string().optional(),
 });

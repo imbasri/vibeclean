@@ -21,7 +21,7 @@ import {
   Copy,
   RefreshCw,
 } from "lucide-react";
-import { toast } from "sonner";
+import { gooeyToast } from "goey-toast";
 
 interface PaymentQRISDialogProps {
   open: boolean;
@@ -132,7 +132,7 @@ export function PaymentQRISDialog({
 
       if (data.isPaid) {
         setStatus("paid");
-        toast.success("Pembayaran berhasil diterima!");
+        gooeyToast.success("Pembayaran berhasil diterima!");
         onPaymentSuccess?.();
       } else if (data.isExpired) {
         setStatus("expired");
@@ -190,7 +190,7 @@ export function PaymentQRISDialog({
   const copyPaymentUrl = () => {
     if (paymentData?.paymentUrl) {
       navigator.clipboard.writeText(paymentData.paymentUrl);
-      toast.success("Link pembayaran disalin!");
+      gooeyToast.success("Link pembayaran disalin!");
     }
   };
 

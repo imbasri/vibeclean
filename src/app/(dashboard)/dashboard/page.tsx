@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/auth-context";
-import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PermissionGuard, RoleBadge } from "@/components/common/permission-guard";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
@@ -260,7 +259,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <DashboardLayout title="Dashboard">
+    <>
       {/* Welcome Section */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -315,6 +314,6 @@ export default function DashboardPage() {
         <RecentOrders orders={recentOrders} isLoading={isLoading} />
         <QuickActions />
       </div>
-    </DashboardLayout>
+    </>
   );
 }
