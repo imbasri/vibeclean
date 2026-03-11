@@ -27,7 +27,21 @@ import type {
 // CONFIGURATION
 // ============================================
 
-const MAYAR_API_BASE_URL = "https://api.mayar.id/hl/v1";
+// Mayar API base URLs for different environments
+const MAYAR_BASE_URLS: Record<string, string> = {
+  production: "https://api.mayar.id/hl/v1",
+  sandbox: "https://sandbox-api.mayar.id/hl/v1",
+};
+
+// Environment configuration
+// MAYAR_ENV: "production" | "sandbox" (default: production)
+// MAYAR_API_BASE_URL: optional override for custom endpoints
+const mayarEnv = (process.env.MAYAR_ENV || "production").toLowerCase();
+const MAYAR_API_BASE_URL =
+  process.env.MAYAR_API_BASE_URL ||
+  MAYAR_BASE_URLS[mayarEnv] ||
+  MAYAR_BASE_URLS["production"];
+
 const MAYAR_API_KEY = process.env.MAYAR_API_KEY;
 const MAYAR_WEBHOOK_SECRET = process.env.MAYAR_WEBHOOK_SECRET;
 const REDIRECT_URL = process.env.NEXT_PUBLIC_MAYAR_REDIRECT_URL || "http://localhost:3000/payment/success";
@@ -51,6 +65,31 @@ export class MayarError extends Error {
 }
 
 // ============================================
+// CONFIGURATION HELPERS
+// ============================================
+
+/**
+ * Get current Mayar environment
+ */
+export function getMayarEnvironment(): string {
+  return mayarEnv;
+}
+
+/**
+ * Get Mayar base URL
+ */
+export function getMayarBaseUrl(): string {
+  return MAYAR_API_BASE_URL;
+}
+
+/**
+ * Check if running in sandbox mode
+ */
+export function isMayarSandbox(): boolean {
+  return mayarEnv === "sandbox";
+}
+
+// ============================================
 // API CLIENT
 // ============================================
 
@@ -60,7 +99,7 @@ async function mayarFetch<T>(
 ): Promise<MayarResponse<T>> {
   if (!MAYAR_API_KEY) {
     throw new MayarError(
-      "MAYAR_API_KEY is not configured",
+      `MAYAR_API_KEY is not configured. Environment: ${mayarEnv}, Base URL: ${MAYAR_API_BASE_URL}`,
       500,
       "Missing API key"
     );

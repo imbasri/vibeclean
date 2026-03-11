@@ -41,7 +41,42 @@ Sebagai Founder, kamu mendapatkan uang dari tiga pintu:
 
 ---
 
-## **4. Proses Bisnis & Alur Kerja (Workflow)**
+## 3A. Add-on Products
+
+| Add-on | Harga | Durasi |
+|--------|-------|--------|
+| Custom Domain | Rp 299.000 | 1 tahun |
+| WhatsApp 100 Pesan | Rp 25.000 | 30 hari |
+| WhatsApp 500 Pesan | Rp 100.000 | 30 hari |
+| WhatsApp 1000 Pesan | Rp 175.000 | 30 hari |
+
+---
+
+## 4. Technical Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript |
+| Database | PostgreSQL |
+| ORM | Drizzle ORM |
+| Auth | Better Auth |
+| Payment | Mayar (QRIS, VA) |
+| File Upload | UploadThing |
+| Email | Resend |
+| UI | Shadcn/UI + Tailwind CSS |
+
+---
+
+## 5. Implementation Notes
+
+Setiap perubahan signifikan didokumentasikan di folder `implementation/`.
+
+Contoh: lihat `implementation/2026-03-11-uploadthing/README.md`
+
+---
+
+## 6. Proses Bisnis & Alur Kerja (Workflow)
 
 ### **A. Onboarding (Pendaftaran Klien)**
 
@@ -66,7 +101,7 @@ Sebagai Founder, kamu mendapatkan uang dari tiga pintu:
 
 ---
 
-## **5. Strategi Pemasaran (GTM Strategy)**
+## 7. Strategi Pemasaran (GTM Strategy)
 
 * **Target Market:** Pemilik laundry kiloan di area perkotaan, laundry sepatu, dan katering laundry ruko.
 * **Channel:** * **Instagram/TikTok:** Konten "Life as a Laundry Owner" menggunakan VibeClean.
@@ -77,7 +112,7 @@ Sebagai Founder, kamu mendapatkan uang dari tiga pintu:
 
 ---
 
-## **6. Operasional Founder (Behind the Scene)**
+## 8. Operasional Founder (Behind the Scene)
 
 Sebagai Founder, tugas harianmu adalah:
 
@@ -87,7 +122,7 @@ Sebagai Founder, tugas harianmu adalah:
 
 ---
 
-## **7. Roadmap Masa Depan**
+## 9. Roadmap Masa Depan
 
 * **VibeClean Supply:** Marketplace khusus deterjen dan plastik laundry (Cuan tambahan dari *dropship/affiliate* bahan baku).
 * **AI Laundry Assistant:** AI yang bisa memprediksi kapan stok deterjen habis berdasarkan jumlah cucian.

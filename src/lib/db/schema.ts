@@ -1041,3 +1041,205 @@ export const platformSettings = pgTable(
 // ============================================
 
 export const platformSettingsRelations = relations(platformSettings, ({ one }) => ({}));
+
+// ============================================
+// ADD-ON TYPES
+// ============================================
+
+export const addonTypeEnum = pgEnum("addon_type", [
+  "custom_domain",
+  "whatsapp_quota",
+]);
+
+export const addonPurchaseStatusEnum = pgEnum("addon_purchase_status", [
+  "pending",
+  "active",
+  "expired",
+  "cancelled",
+]);
+
+// ============================================
+// ADD-ON PRODUCTS
+// ============================================
+
+export const addonProducts = pgTable(
+  "addon_products",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    type: addonTypeEnum("type").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    price: integer("price").notNull(),
+    durationDays: integer("duration_days").notNull(),
+    quota: integer("quota"),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("addon_products_type_idx").on(table.type),
+    index("addon_products_active_idx").on(table.isActive),
+  ]
+);
+
+// ============================================
+// ADD-ON PURCHASES
+// ============================================
+
+export const addonPurchases = pgTable(
+  "addon_purchases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").notNull()
+      .references(() => addonProducts.id),
+    status: addonPurchaseStatusEnum("status").default("pending"),
+    startDate: timestamp("start_date"),
+    endDate: timestamp("end_date"),
+    customDomain: text("custom_domain"),
+    customDomainVerified: boolean("custom_domain_verified").default(false),
+    customDomainVerifiedAt: timestamp("custom_domain_verified_at"),
+    whatsappQuota: integer("whatsapp_quota").default(0),
+    whatsappUsed: integer("whatsapp_used").default(0),
+    paymentAmount: integer("payment_amount"),
+    paymentStatus: text("payment_status").default("pending"),
+    mayarPaymentId: text("mayar_payment_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("addon_purchases_org_idx").on(table.organizationId),
+    index("addon_purchases_status_idx").on(table.status),
+  ]
+);
+
+// ============================================
+// ADD-ON PRODUCTS RELATIONS
+// ============================================
+
+export const addonProductsRelations = relations(addonProducts, ({ many }) => ({
+  purchases: many(addonPurchases),
+}));
+
+// ============================================
+// ADD-ON PURCHASES RELATIONS
+// ============================================
+
+export const addonPurchasesRelations = relations(addonPurchases, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [addonPurchases.organizationId],
+    references: [organizations.id],
+  }),
+  product: one(addonProducts, {
+    fields: [addonPurchases.productId],
+    references: [addonProducts.id],
+  }),
+}));
+
+// ============================================
+// MEMBER PACKAGES (Paket Langganan Pelanggan)
+// ============================================
+
+export const memberPackageStatusEnum = pgEnum("member_package_status", [
+  "active",
+  "inactive",
+]);
+
+export const memberSubscriptionStatusEnum = pgEnum("member_subscription_status", [
+  "active",
+  "expired",
+  "cancelled",
+  "paused",
+]);
+
+export const memberPackages = pgTable(
+  "member_packages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    price: integer("price").notNull(), // Harga per bulan dalam Rupiah
+    discountType: text("discount_type").notNull().default("percentage"), // "percentage" atau "fixed"
+    discountValue: integer("discount_value").notNull().default(0), // % atau fixed amount
+    maxWeightKg: integer("max_weight_kg"), // Max berat per order (null = unlimited)
+    freePickupDelivery: boolean("free_pickup_delivery").default(false),
+    maxTransactionsPerMonth: integer("max_transactions_per_month"), // null = unlimited
+    isActive: boolean("is_active").default(true),
+    sortOrder: integer("sort_order").default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("member_packages_org_idx").on(table.organizationId),
+    index("member_packages_active_idx").on(table.isActive),
+  ]
+);
+
+export const memberSubscriptions = pgTable(
+  "member_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    branchId: uuid("branch_id")
+      .references(() => branches.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .references(() => customers.id, { onDelete: "cascade" })
+      .notNull(),
+    packageId: uuid("package_id")
+      .references(() => memberPackages.id, { onDelete: "cascade" })
+      .notNull(),
+    status: memberSubscriptionStatusEnum("status").notNull().default("active"),
+    startDate: timestamp("start_date").notNull(),
+    endDate: timestamp("end_date").notNull(),
+    autoRenew: boolean("auto_renew").default(true),
+    mayarSubscriptionId: text("mayar_subscription_id"),
+    transactionsThisMonth: integer("transactions_this_month").default(0),
+    lastTransactionReset: timestamp("last_transaction_reset").defaultNow(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("member_subs_org_idx").on(table.organizationId),
+    index("member_subs_customer_idx").on(table.customerId),
+    index("member_subs_status_idx").on(table.status),
+    index("member_subs_package_idx").on(table.packageId),
+  ]
+);
+
+// ============================================
+// MEMBER PACKAGES RELATIONS
+// ============================================
+
+export const memberPackagesRelations = relations(memberPackages, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [memberPackages.organizationId],
+    references: [organizations.id],
+  }),
+  subscriptions: many(memberSubscriptions),
+}));
+
+export const memberSubscriptionsRelations = relations(memberSubscriptions, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [memberSubscriptions.organizationId],
+    references: [organizations.id],
+  }),
+  branch: one(branches, {
+    fields: [memberSubscriptions.branchId],
+    references: [branches.id],
+  }),
+  customer: one(customers, {
+    fields: [memberSubscriptions.customerId],
+    references: [customers.id],
+  }),
+  package: one(memberPackages, {
+    fields: [memberSubscriptions.packageId],
+    references: [memberPackages.id],
+  }),
+}));

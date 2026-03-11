@@ -81,6 +81,12 @@ const NAV_ITEMS: NavItem[] = [
     feature: "customers",
   },
   {
+    title: "Paket Member",
+    href: "/dashboard/members",
+    icon: CreditCard,
+    feature: "customers",
+  },
+  {
     title: "Laporan",
     href: "/dashboard/reports",
     icon: BarChart3,
@@ -302,9 +308,11 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   return (
     <div className="flex h-screen bg-background">
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - Sticky */}
       <aside className="hidden lg:flex lg:w-64 lg:flex-shrink-0">
-        <Sidebar className="w-64" />
+        <div className="sticky top-0 h-screen">
+          <Sidebar className="w-64" />
+        </div>
       </aside>
 
       {/* Main Content */}

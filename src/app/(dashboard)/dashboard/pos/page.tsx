@@ -545,6 +545,8 @@ export default function POSPage() {
         : isDigitalPayment 
           ? "Menunggu Pembayaran Digital" 
           : "Bayar di Tempat";
+
+      const trackingUrl = `${window.location.origin}/track?order=${orderNumber}`;
           
       const message = `Halo ${customerName}! 
 
@@ -557,6 +559,9 @@ Terima kasih telah menggunakan VibeClean Laundry.
 
 📍 Estimasi Selesai:
 ${newOrder.estimatedCompletionAt ? new Date(newOrder.estimatedCompletionAt).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Akan diinformasikan"}
+
+🔍 Lacak Pesanan:
+${trackingUrl}
 
 Terima kasih! 🙏`;
 

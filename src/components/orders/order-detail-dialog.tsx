@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Loader2 } from "lucide-react";
 import {
   Package,
   Clock,
@@ -27,6 +29,7 @@ import {
   ExternalLink,
   Printer,
   Copy,
+  Check,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Order, OrderStatus, PaymentStatus, PaymentMethod } from "@/types";
@@ -38,6 +41,7 @@ interface OrderDetailDialogProps {
   order: Order | null;
   onPrintReceipt?: () => void;
   onOpenPayment?: () => void;
+  onUpdate?: () => void;
 }
 
 // Status config for consistent styling
@@ -93,7 +97,10 @@ export function OrderDetailDialog({
   order,
   onPrintReceipt,
   onOpenPayment,
+  onUpdate,
 }: OrderDetailDialogProps) {
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+
   if (!order) return null;
 
   const paymentMethodKey = order.paymentMethod || "cash";
@@ -103,6 +110,7 @@ export function OrderDetailDialog({
   // Check if order has digital payment info
   const hasDigitalPayment = order.mayarPaymentId || order.paymentUrl;
   const isDigitalPaymentPending = hasDigitalPayment && order.paymentStatus === "unpaid";
+  const canMarkAsPaid = order.paymentStatus !== "paid";
   
   // Format payment expiration
   const paymentExpiredAt = order.paymentExpiredAt 
@@ -120,6 +128,46 @@ export function OrderDetailDialog({
   const openPaymentUrl = () => {
     if (order.paymentUrl) {
       window.open(order.paymentUrl, "_blank");
+    }
+  };
+
+  const handlePrint = () => {
+    if (order) {
+      window.open(`/dashboard/orders/print/${order.id}`, '_blank');
+    }
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!order) return;
+    
+    try {
+      setIsMarkingPaid(true);
+      const response = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentStatus: "paid",
+          paidAmount: order.total,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal mengupdate status");
+      }
+
+      gooeyToast.success("Pembayaran ditandai lunas!");
+      
+      // Call the update callback if provided
+      if (onUpdate) {
+        onUpdate();
+      }
+      
+      // Close the dialog
+      onOpenChange(false);
+    } catch (error) {
+      gooeyToast.error("Gagal mengupdate status pembayaran");
+    } finally {
+      setIsMarkingPaid(false);
     }
   };
 
@@ -295,10 +343,25 @@ export function OrderDetailDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          {onPrintReceipt && (
-            <Button variant="outline" onClick={onPrintReceipt}>
-              <Printer className="w-4 h-4 mr-2" />
-              Cetak Nota
+          {/* Print Button */}
+          <Button variant="outline" onClick={handlePrint}>
+            <Printer className="w-4 h-4 mr-2" />
+            Cetak Nota
+          </Button>
+          
+          {/* Show "Tandai Lunas" button for unpaid orders (cash/manual payment) */}
+          {canMarkAsPaid && (
+            <Button 
+              variant="secondary" 
+              onClick={handleMarkAsPaid}
+              disabled={isMarkingPaid}
+            >
+              {isMarkingPaid ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              Tandai Lunas
             </Button>
           )}
           

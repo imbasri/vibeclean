@@ -12,6 +12,7 @@ import {
 } from "@/lib/db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { updateOrderStatusSchema, orderStatuses } from "@/lib/validations/schemas";
+import { sendTemplatedEmail } from "@/lib/email";
 
 // Helper to get session
 async function getSession() {
@@ -239,6 +240,28 @@ export async function PATCH(
       total: parseFloat(updatedOrder.total),
       paidAmount: parseFloat(updatedOrder.paidAmount),
     };
+
+    // Send email notification for status changes
+    if (body.status && body.status !== existingOrder.status) {
+      const statusEmailTemplates: Record<string, string> = {
+        ready: "orderReady",
+        completed: "orderCompleted",
+      };
+
+      const templateName = statusEmailTemplates[body.status];
+      if (templateName) {
+        sendTemplatedEmail(
+          existingOrder.customerPhone + "@s.whatsapp.net", // In production, get real email
+          templateName,
+          {
+            orderNumber: existingOrder.orderNumber,
+            customerName: existingOrder.customerName,
+          }
+        ).catch((err) => {
+          console.error("Failed to send status email:", err);
+        });
+      }
+    }
 
     return NextResponse.json({ order: orderResponse });
   } catch (error) {

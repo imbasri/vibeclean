@@ -16,6 +16,7 @@ import {
 } from "@/lib/db";
 import { eq, and, inArray, desc, or, ilike, sql, gte } from "drizzle-orm";
 import { createOrderSchema } from "@/lib/validations/schemas";
+import { sendTemplatedEmail } from "@/lib/email";
 
 // Helper to get session
 async function getSession() {
@@ -227,6 +228,40 @@ async function incrementSubscriptionOrderCount(branchId: string): Promise<void> 
   }
 }
 
+// Helper to record member subscription transaction
+async function recordMemberTransaction(subscriptionId: string): Promise<void> {
+  try {
+    const { memberSubscriptions } = await import("@/lib/db");
+    
+    const [subscription] = await db
+      .select()
+      .from(memberSubscriptions)
+      .where(eq(memberSubscriptions.id, subscriptionId));
+
+    if (!subscription) return;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastReset = subscription.lastTransactionReset 
+      ? new Date(subscription.lastTransactionReset) 
+      : startOfMonth;
+    
+    const shouldReset = lastReset < startOfMonth;
+    const currentCount = shouldReset ? 0 : (subscription.transactionsThisMonth || 0);
+
+    await db
+      .update(memberSubscriptions)
+      .set({
+        transactionsThisMonth: currentCount + 1,
+        lastTransactionReset: shouldReset ? now : lastReset,
+        updatedAt: now,
+      })
+      .where(eq(memberSubscriptions.id, subscriptionId));
+  } catch (error) {
+    console.error("Error recording member transaction:", error);
+  }
+}
+
 // GET /api/orders - List orders for user's branches
 export async function GET(request: NextRequest) {
   try {
@@ -315,13 +350,49 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const paginatedResult = filteredResult.slice(offset, offset + limit);
 
-    // Convert decimal strings to numbers
+    // Fetch order items for paginated orders
+    const orderIds = paginatedResult.map((o) => o.id);
+    let orderItemsList: any[] = [];
+    if (orderIds.length > 0) {
+      orderItemsList = await db
+        .select({
+          id: orderItems.id,
+          orderId: orderItems.orderId,
+          serviceId: orderItems.serviceId,
+          serviceName: orderItems.serviceName,
+          quantity: orderItems.quantity,
+          unit: orderItems.unit,
+          pricePerUnit: orderItems.pricePerUnit,
+          subtotal: orderItems.subtotal,
+          notes: orderItems.notes,
+        })
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, orderIds));
+    }
+
+    // Group items by orderId
+    const itemsByOrderId = new Map<string, any[]>();
+    for (const item of orderItemsList) {
+      const orderId = item.orderId;
+      if (!itemsByOrderId.has(orderId)) {
+        itemsByOrderId.set(orderId, []);
+      }
+      itemsByOrderId.get(orderId)!.push({
+        ...item,
+        quantity: parseFloat(item.quantity),
+        pricePerUnit: parseFloat(item.pricePerUnit),
+        subtotal: parseFloat(item.subtotal),
+      });
+    }
+
+    // Convert decimal strings to numbers and attach items
     const ordersWithNumberValues = paginatedResult.map((o) => ({
       ...o,
       subtotal: parseFloat(o.subtotal),
       discount: parseFloat(o.discount),
       total: parseFloat(o.total),
       paidAmount: parseFloat(o.paidAmount),
+      items: itemsByOrderId.get(o.id) || [],
     }));
 
     return NextResponse.json({
@@ -449,6 +520,67 @@ export async function POST(request: NextRequest) {
 
     // Calculate discount
     let discountAmount = 0;
+    let memberDiscountAmount = 0;
+    let memberSubscriptionId: string | null = null;
+    let memberDiscountInfo: { type: string; value: number; name: string } | null = null;
+
+    // Check for member discount first
+    if (customerId && subtotal > 0) {
+      try {
+        const { memberSubscriptions, memberPackages } = await import("@/lib/db");
+        const now = new Date();
+        
+        const memberSub = await db
+          .select({
+            id: memberSubscriptions.id,
+            packageId: memberSubscriptions.packageId,
+            transactionsThisMonth: memberSubscriptions.transactionsThisMonth,
+            maxTransactionsPerMonth: memberPackages.maxTransactionsPerMonth,
+            discountType: memberPackages.discountType,
+            discountValue: memberPackages.discountValue,
+            maxWeightKg: memberPackages.maxWeightKg,
+            name: memberPackages.name,
+          })
+          .from(memberSubscriptions)
+          .innerJoin(memberPackages, eq(memberSubscriptions.packageId, memberPackages.id))
+          .where(and(
+            eq(memberSubscriptions.customerId, customerId),
+            eq(memberSubscriptions.status, "active"),
+            sql`${memberSubscriptions.endDate} >= ${now}`
+          ))
+          .limit(1);
+
+        if (memberSub.length > 0) {
+          const sub = memberSub[0];
+          const currentTransactions = sub.transactionsThisMonth || 0;
+          
+          // Check transaction limit
+          const atLimit = sub.maxTransactionsPerMonth && 
+            currentTransactions >= sub.maxTransactionsPerMonth;
+          
+          if (!atLimit) {
+            // Calculate member discount
+            if (sub.discountType === "percentage") {
+              memberDiscountAmount = (subtotal * sub.discountValue) / 100;
+            } else {
+              memberDiscountAmount = Math.min(sub.discountValue, subtotal);
+            }
+            
+            memberSubscriptionId = sub.id;
+            memberDiscountInfo = {
+              type: sub.discountType,
+              value: sub.discountValue,
+              name: sub.name,
+            };
+          }
+        }
+      } catch (err) {
+        console.error("Error checking member discount:", err);
+        // Continue without member discount
+      }
+    }
+
+    // Apply manual discount (coupon, etc)
     if (validData.discount && validData.discountType) {
       if (validData.discountType === "percentage") {
         discountAmount = (subtotal * validData.discount) / 100;
@@ -457,7 +589,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const total = Math.max(0, subtotal - discountAmount);
+    const total = Math.max(0, subtotal - memberDiscountAmount - discountAmount);
 
     // Calculate estimated completion
     const estimatedCompletionAt = new Date();
@@ -467,6 +599,11 @@ export async function POST(request: NextRequest) {
 
     // Generate order number
     const orderNumber = generateOrderNumber();
+
+    // Handle cash payments - set as paid immediately and advance to processing
+    const isCashPayment = validData.paymentMethod === "cash";
+    const initialStatus = isCashPayment ? "processing" : "pending";
+    const initialPaymentStatus = isCashPayment ? "paid" : "unpaid";
 
     // Create order and items in a transaction
     const result = await db.transaction(async (tx) => {
@@ -485,10 +622,10 @@ export async function POST(request: NextRequest) {
           discountReason: validData.discountReason || null,
           couponCode: validData.couponCode || null,
           total: String(total),
-          status: "pending",
-          paymentStatus: "unpaid",
+          status: initialStatus,
+          paymentStatus: initialPaymentStatus,
           paymentMethod: validData.paymentMethod || null,
-          paidAmount: "0",
+          paidAmount: isCashPayment ? String(total) : "0",
           notes: validData.notes || null,
           estimatedCompletionAt,
           createdBy: session.user.id,
@@ -510,10 +647,21 @@ export async function POST(request: NextRequest) {
       await tx.insert(orderStatusHistory).values({
         orderId: newOrder.id,
         fromStatus: null,
-        toStatus: "pending",
+        toStatus: initialStatus,
         changedBy: session.user.id,
-        notes: "Order dibuat",
+        notes: isCashPayment ? "Order dibuat - Pembayaran Tunai" : "Order dibuat",
       });
+
+      // If cash payment, add another history entry showing transition
+      if (isCashPayment) {
+        await tx.insert(orderStatusHistory).values({
+          orderId: newOrder.id,
+          fromStatus: "pending",
+          toStatus: "processing",
+          changedBy: "system",
+          notes: "Pembayaran tunai - langsung diproses",
+        });
+      }
 
       // Update customer stats if customerId is provided
       if (customerId) {
@@ -535,6 +683,13 @@ export async function POST(request: NextRequest) {
       console.error("Failed to increment order count:", err);
     });
 
+    // Record member subscription transaction (non-blocking)
+    if (memberSubscriptionId) {
+      recordMemberTransaction(memberSubscriptionId).catch((err) => {
+        console.error("Failed to record member transaction:", err);
+      });
+    }
+
     // Convert decimal strings to numbers for response
     const orderResponse = {
       ...result.order,
@@ -549,6 +704,25 @@ export async function POST(request: NextRequest) {
         subtotal: parseFloat(item.subtotal),
       })),
     };
+
+    // Send email notification (fire and forget - don't block response)
+    sendTemplatedEmail(
+      orderResponse.customerPhone + "@s.whatsapp.net", // In production, get real email from customer
+      "orderCreated",
+      {
+        orderNumber: orderResponse.orderNumber,
+        customerName: orderResponse.customerName,
+        total: `Rp ${orderResponse.total.toLocaleString("id-ID")}`,
+        estimatedDate: new Date(orderResponse.estimatedCompletionAt).toLocaleDateString("id-ID", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
+      }
+    ).catch((err) => {
+      console.error("Failed to send order email:", err);
+    });
 
     return NextResponse.json({ order: orderResponse }, { status: 201 });
   } catch (error) {

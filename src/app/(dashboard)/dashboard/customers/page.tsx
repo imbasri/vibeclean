@@ -24,6 +24,7 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { gooeyToast } from "goey-toast";
 
@@ -110,7 +111,8 @@ export default function CustomersPage() {
     error, 
     createCustomer, 
     updateCustomer, 
-    deleteCustomer 
+    deleteCustomer,
+    refetch 
   } = useCustomers();
   
   // Modal states
@@ -209,6 +211,7 @@ export default function CustomersPage() {
       if (newCustomer) {
         setIsAddDialogOpen(false);
         addForm.reset();
+        await refetch();
         gooeyToast.success("Pelanggan Ditambahkan", { description: `${newCustomer.name} berhasil ditambahkan` });
       }
     } catch (err) {
@@ -225,6 +228,7 @@ export default function CustomersPage() {
       if (updated) {
         setIsEditDialogOpen(false);
         setSelectedCustomer(null);
+        await refetch();
         gooeyToast.success("Pelanggan Diperbarui", { description: `${data.name} berhasil diperbarui` });
       }
     } catch (err) {
@@ -254,6 +258,7 @@ export default function CustomersPage() {
     try {
       const success = await deleteCustomer(customerToDelete.id);
       if (success) {
+        await refetch();
         gooeyToast.success("Pelanggan Dihapus", {
           description: `${customerToDelete.name} berhasil dihapus`,
         });
@@ -274,6 +279,25 @@ export default function CustomersPage() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      gooeyToast.success("Export Dimulai", { description: "Laporan pelanggan sedang diunduh..." });
+      const response = await fetch("/api/customers/export");
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `laporan-pelanggan-${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      gooeyToast.error("Export Gagal", { description: "Gagal mengunduh laporan" });
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -287,6 +311,12 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold text-foreground">Pelanggan</h1>
           <p className="text-muted-foreground mt-1">Kelola data pelanggan dan loyalty program</p>
         </div>
+        <PermissionGuard allowedRoles={["owner", "manager"]}>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </PermissionGuard>
         <PermissionGuard allowedRoles={["owner", "manager", "cashier"]}>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <UserPlus className="h-4 w-4 mr-2" />

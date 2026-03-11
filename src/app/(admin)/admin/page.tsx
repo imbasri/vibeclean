@@ -23,6 +23,9 @@ import {
   Calendar,
   DollarSign,
   BarChart3,
+  Wallet,
+  Receipt,
+  Percent,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -98,6 +101,34 @@ interface Pagination {
   limit: number;
   total: number;
   totalPages: number;
+}
+
+interface RevenueData {
+  summary: {
+    totalRevenue: number;
+    transactionFees: number;
+    subscriptionRevenue: number;
+    transactionCount: number;
+    subscriptionCount: number;
+  };
+  thisMonth: {
+    transactionFees: number;
+    subscriptionRevenue: number;
+  };
+  recentTransactions: Array<{
+    id: string;
+    orderNumber: string;
+    total: number;
+    transactionFee: number;
+    paidAt: string;
+  }>;
+  recentSubscriptions: Array<{
+    id: string;
+    invoiceNumber: string;
+    amount: number;
+    plan: string;
+    paidAt: string;
+  }>;
 }
 
 // ============================================
@@ -264,6 +295,11 @@ export default function AdminDashboardPage() {
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Revenue data
+  const [revenue, setRevenue] = useState<RevenueData | null>(null);
+  const [revenuePeriod, setRevenuePeriod] = useState<string>("all");
+  const [isLoadingRevenue, setIsLoadingRevenue] = useState(false);
+  
   // Filters
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState<string>("all");
@@ -287,6 +323,23 @@ export default function AdminDashboardPage() {
       setError("Gagal memuat statistik");
     }
   }, []);
+
+  // Fetch revenue
+  const fetchRevenue = useCallback(async () => {
+    setIsLoadingRevenue(true);
+    try {
+      const response = await fetch(`/api/admin/revenue?period=${revenuePeriod}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch revenue");
+      }
+      const data = await response.json();
+      setRevenue(data);
+    } catch (err) {
+      console.error("Error fetching revenue:", err);
+    } finally {
+      setIsLoadingRevenue(false);
+    }
+  }, [revenuePeriod]);
 
   // Fetch organizations
   const fetchOrganizations = useCallback(async () => {
@@ -322,7 +375,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      await Promise.all([fetchStats(), fetchOrganizations()]);
+      await Promise.all([fetchStats(), fetchOrganizations(), fetchRevenue()]);
       setIsLoading(false);
     };
     loadData();
@@ -332,6 +385,11 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     fetchOrganizations();
   }, [pagination.page, planFilter, statusFilter]);
+
+  // Refetch revenue when period changes
+  useEffect(() => {
+    fetchRevenue();
+  }, [revenuePeriod]);
 
   // Debounced search
   useEffect(() => {
@@ -487,6 +545,145 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
         )}
+
+        {/* Revenue Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-green-500" />
+                <CardTitle>Revenue & Transaction Fees</CardTitle>
+              </div>
+              <Select value={revenuePeriod} onValueChange={(value) => setRevenuePeriod(value ?? "all")}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Periode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Waktu</SelectItem>
+                  <SelectItem value="year">Tahun Ini</SelectItem>
+                  <SelectItem value="month">Bulan Ini</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {isLoadingRevenue ? (
+              <div className="grid gap-4 md:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
+                ))}
+              </div>
+            ) : revenue && (
+              <>
+                {/* Revenue Summary Cards */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
+                        Total Revenue
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-700 dark:text-green-300">
+                        {formatCurrency(revenue.summary.totalRevenue)}
+                      </div>
+                      <p className="text-xs text-green-600 dark:text-green-400">
+                        Fees + Subscriptions
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                        <Receipt className="h-4 w-4" />
+                        Transaction Fees
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                        {formatCurrency(revenue.summary.transactionFees)}
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        {revenue.summary.transactionCount} transactions
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                        <CreditCard className="h-4 w-4" />
+                        Subscription Revenue
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">
+                        {formatCurrency(revenue.summary.subscriptionRevenue)}
+                      </div>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                        {revenue.summary.subscriptionCount} payments
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                        <Percent className="h-4 w-4" />
+                        Bulan Ini
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+                        {formatCurrency(revenue.thisMonth.transactionFees + revenue.thisMonth.subscriptionRevenue)}
+                      </div>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        {formatCurrency(revenue.thisMonth.transactionFees)} fees + {formatCurrency(revenue.thisMonth.subscriptionRevenue)} subs
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Transactions */}
+                {revenue.recentTransactions.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                      <Receipt className="h-4 w-4" />
+                      Recent Transaction Fees
+                    </h4>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium">Order</th>
+                            <th className="px-3 py-2 text-right font-medium">Total</th>
+                            <th className="px-3 py-2 text-right font-medium">Fee (VibeClean)</th>
+                            <th className="px-3 py-2 text-left font-medium">Tanggal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {revenue.recentTransactions.slice(0, 5).map((tx) => (
+                            <tr key={tx.id} className="border-t">
+                              <td className="px-3 py-2 font-mono text-xs">{tx.orderNumber}</td>
+                              <td className="px-3 py-2 text-right">{formatCurrency(tx.total)}</td>
+                              <td className="px-3 py-2 text-right text-blue-600 font-medium">
+                                +{formatCurrency(tx.transactionFee)}
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {tx.paidAt ? new Date(tx.paidAt).toLocaleDateString("id-ID") : "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Organizations Table */}
         <Card>

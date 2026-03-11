@@ -9,6 +9,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/orders": "Pesanan",
   "/dashboard/services": "Layanan",
   "/dashboard/customers": "Pelanggan",
+  "/dashboard/members": "Paket Member",
   "/dashboard/reports": "Laporan",
   "/dashboard/staff": "Manajemen Karyawan",
   "/dashboard/branches": "Cabang",

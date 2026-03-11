@@ -20,6 +20,7 @@ import {
   Layers,
   Loader2,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { gooeyToast } from "goey-toast";
 
@@ -289,6 +290,25 @@ export default function ServicesPage() {
     setIsDeleteDialogOpen(true);
   };
 
+  const handleExport = async () => {
+    try {
+      gooeyToast.success("Export Dimulai", { description: "Laporan layanan sedang diunduh..." });
+      const response = await fetch("/api/services/export");
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `laporan-layanan-${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      gooeyToast.error("Export Gagal", { description: "Gagal mengunduh laporan" });
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -302,6 +322,12 @@ export default function ServicesPage() {
           <h1 className="text-2xl font-bold text-foreground">Layanan</h1>
           <p className="text-muted-foreground mt-1">Kelola layanan laundry di cabang ini</p>
         </div>
+        <PermissionGuard allowedRoles={["owner", "manager"]}>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </PermissionGuard>
         <PermissionGuard allowedRoles={["owner", "manager"]}>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />

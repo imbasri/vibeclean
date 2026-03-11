@@ -142,6 +142,12 @@ export default function OrdersPage() {
     setIsDetailDialogOpen(true);
   };
 
+  // Handler for printing receipt
+  const handlePrintReceipt = (order: Order) => {
+    // Open print dialog or navigate to print page
+    window.open(`/dashboard/orders/print/${order.id}`, '_blank');
+  };
+
   // Handler for opening cancel dialog
   const openCancelDialog = (order: Order) => {
     setOrderToCancel(order);
@@ -590,13 +596,15 @@ export default function OrdersPage() {
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={(props) => (
-                              <Button {...props} variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100">
+                              <Button {...props} variant="ghost" size="icon">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             )}
                           />
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+                            <div className="px-1.5 py-1 text-xs font-medium text-muted-foreground">
+                              Aksi
+                            </div>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => openDetailDialog(order)}>
                               <Eye className="w-4 h-4 mr-2" />
@@ -702,6 +710,7 @@ export default function OrdersPage() {
         onOpenChange={setIsDetailDialogOpen}
         order={selectedOrder}
         onOpenPayment={handleOpenPayment}
+        onUpdate={refetch}
       />
       
       {/* QRIS Payment Dialog */}

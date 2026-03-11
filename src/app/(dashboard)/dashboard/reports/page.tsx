@@ -63,9 +63,61 @@ export default function ReportsPage() {
   // Fetch reports data from API
   const { data, isLoading, error, refetch } = useReports({ period });
 
-  const handleExport = () => {
-    gooeyToast.success("Export Dimulai", { description: "Laporan sedang diunduh..." });
-    // TODO: Implement actual export functionality
+  const handleExport = async () => {
+    try {
+      gooeyToast.success("Export Dimulai", { description: "Laporan sedang diunduh..." });
+      
+      // Build URL with current period parameters
+      const params = new URLSearchParams();
+      params.set("format", "excel");
+      
+      // Add date range based on period
+      const now = new Date();
+      let startDate: Date;
+      
+      switch (period) {
+        case "today":
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case "week":
+          startDate = new Date(now);
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case "month":
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case "year":
+          startDate = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      
+      params.set("start", startDate.toISOString().split("T")[0]);
+      params.set("end", new Date().toISOString().split("T")[0]);
+      
+      // Trigger download
+      const response = await fetch(`/api/reports/export?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `laporan-orders-${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      gooeyToast.success("Berhasil", { description: "Laporan berhasil diunduh!" });
+    } catch (error) {
+      console.error("Export error:", error);
+      gooeyToast.error("Gagal", { description: "Gagal mengekspor laporan" });
+    }
   };
 
   // Calculate max for bar chart
