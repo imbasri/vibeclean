@@ -171,11 +171,13 @@ export function FounderSidebarMobile() {
 
   return (
     <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="lg:hidden">
-          <Menu className="h-5 w-5" />
-        </Button>
-      </SheetTrigger>
+      <SheetTrigger
+        render={(props) => (
+          <Button {...props} variant="ghost" size="icon" className="lg:hidden">
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
+      />
       <SheetContent side="left" className="w-64 p-0">
         <div className="flex h-14 items-center border-b px-4">
           <Link href="/founder/dashboard" className="flex items-center gap-2">

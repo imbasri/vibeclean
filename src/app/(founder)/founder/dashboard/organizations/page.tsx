@@ -144,13 +144,13 @@ export default function FounderOrganizationsPage() {
     setPagination((p) => ({ ...p, page: 1 }));
   };
 
-  const handlePlanFilter = (value: string) => {
-    setPlanFilter(value);
+  const handlePlanFilter = (value: string | null) => {
+    setPlanFilter(value || "all");
     setPagination((p) => ({ ...p, page: 1 }));
   };
 
-  const handleStatusFilter = (value: string) => {
-    setStatusFilter(value);
+  const handleStatusFilter = (value: string | null) => {
+    setStatusFilter(value || "all");
     setPagination((p) => ({ ...p, page: 1 }));
   };
 

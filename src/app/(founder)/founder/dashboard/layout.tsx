@@ -1,3 +1,4 @@
+import { BarChart3 } from "lucide-react";
 import { FounderSidebar, FounderSidebarMobile } from "@/components/layout/founder-sidebar";
 
 export default function FounderDashboardLayout({
@@ -33,5 +34,3 @@ export default function FounderDashboardLayout({
     </div>
   );
 }
-
-import { BarChart3 } from "lucide-react";

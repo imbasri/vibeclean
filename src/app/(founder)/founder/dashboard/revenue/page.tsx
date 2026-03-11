@@ -85,7 +85,7 @@ export default function FounderRevenuePage() {
             Laporan pendapatan VibeClean
           </p>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
+        <Select value={period} onValueChange={(value) => setPeriod(value || "month")}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Pilih periode" />
           </SelectTrigger>
