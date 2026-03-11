@@ -36,6 +36,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -440,7 +441,9 @@ function StaffRow({ staff, onEdit, onRemove }: StaffRowProps) {
             )}
           />
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onEdit(staff)}>
               Edit Peran
