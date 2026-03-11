@@ -22,7 +22,7 @@ Berdasarkan **AGENTS.md (Business PRD)**, plan ini meningkatkan Founder Dashboar
 ### 2.1 Transaction Fee Monitoring (HIGH PRIORITY)
 - Total fee terkumpul
 - Fee bulan ini
-- Breakdown per organisasi
+- Growth stats
 
 ### 2.2 Withdrawals Management (HIGH PRIORITY)
 - Tabel semua withdrawal request
@@ -43,39 +43,49 @@ Berdasarkan **AGENTS.md (Business PRD)**, plan ini meningkatkan Founder Dashboar
 
 ```
 src/app/api/founder/
-├── transaction-fee/route.ts
-├── withdrawals/route.ts
-├── withdrawals/[id]/approve/route.ts
-├── withdrawals/[id]/reject/route.ts
-├── addons/route.ts
-└── settings/route.ts
+├── transaction-fee/route.ts          ✅ DONE
+├── withdrawals/route.ts               ✅ DONE
+├── withdrawals/[id]/approve/route.ts ✅ DONE
+├── withdrawals/[id]/reject/route.ts  ✅ DONE
+├── addons/route.ts                   ⏳ Pending
+└── settings/route.ts                 ⏳ Pending
 
 src/app/(founder)/founder/dashboard/
-├── transaction-fee/page.tsx   (NEW)
-├── withdrawals/page.tsx        (NEW)
-├── addons/page.tsx            (NEW)
-└── settings/page.tsx          (NEW)
+├── transaction-fee/page.tsx          ✅ DONE
+├── withdrawals/page.tsx               ✅ DONE
+├── addons/page.tsx                   ⏳ Pending
+└── settings/page.tsx                  ⏳ Pending
 ```
 
 ---
 
 ## 4. Implementation Order
 
-1. **Transaction Fee** - Start here (easiest)
-2. **Withdrawals** - Core business feature
-3. **Settings** - Simple UI
-4. **Add-ons** - Business feature
+1. **Transaction Fee** - ✅ DONE
+2. **Withdrawals** - ✅ DONE
+3. **Settings** - ⏳ Next
+4. **Add-ons** - ⏳ Pending
 
 ---
 
 ## 5. Acceptance Criteria
 
-- [ ] Transaction Fee: View total, monthly, breakdown
-- [ ] Withdrawals: List, approve, reject
+- [x] Transaction Fee: View total, monthly, growth stats
+- [x] Withdrawals: List, approve, reject
 - [ ] Settings: View & edit platform config
 - [ ] Add-ons: List active, revenue summary
 
 ---
 
+## 6. Next Steps
+
+1. Deploy ke Heroku
+2. Test Transaction Fee page
+3. Test Withdrawals page
+4. Lanjut ke Settings & Add-ons
+
+---
+
 *Created: 2026-03-12*
+*Updated: 2026-03-12*
 *Based on: AGENTS.md Business PRD*
