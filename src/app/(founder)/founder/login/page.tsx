@@ -36,7 +36,7 @@ export default function FounderLoginPage() {
         return;
       }
 
-      router.push("/admin");
+      router.push("/founder/dashboard");
       router.refresh();
     } catch {
       setError("Terjadi kesalahan server");

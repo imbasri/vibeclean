@@ -5,6 +5,12 @@ import { verifyFounderSession } from "@/lib/founder-auth";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Redirect /admin to /founder/dashboard
+  if (pathname.startsWith("/admin")) {
+    const dashboardUrl = new URL("/founder/dashboard", request.url);
+    return NextResponse.redirect(dashboardUrl);
+  }
+
   // Check if accessing founder routes (require authentication)
   if (pathname.startsWith("/founder")) {
     // Skip if already on login page
@@ -12,19 +18,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // Verify founder session
+    // Redirect root /founder to dashboard
+    if (pathname === "/founder") {
+      const dashboardUrl = new URL("/founder/dashboard", request.url);
+      return NextResponse.redirect(dashboardUrl);
+    }
+
+    // Verify founder session for other routes
     const session = await verifyFounderSession();
     
     if (!session) {
-      // Redirect to founder login if no session
       const loginUrl = new URL("/founder/login", request.url);
       return NextResponse.redirect(loginUrl);
-    }
-
-    // Redirect /founder to /founder/settings
-    if (pathname === "/founder") {
-      const settingsUrl = new URL("/founder/settings", request.url);
-      return NextResponse.redirect(settingsUrl);
     }
   }
 
@@ -34,5 +39,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/founder/:path*",
+    "/admin/:path*",
   ],
 };
