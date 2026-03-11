@@ -47,11 +47,19 @@ export default function LoginPage() {
       }
 
       gooeyToast.success("Login berhasil!", {
-        description: "Mengalihkan ke dashboard...",
+        description: "Mengalihkan...",
       });
-      
+
+      // Redirect to `next` query param if present, otherwise to /dashboard
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+
       setTimeout(() => {
-        router.push("/dashboard");
+        if (next) {
+          router.push(next);
+        } else {
+          router.push("/dashboard");
+        }
       }, 500);
     } catch (error) {
       gooeyToast.error("Login gagal", {

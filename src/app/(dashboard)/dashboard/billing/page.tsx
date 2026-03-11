@@ -204,8 +204,8 @@ export default function BillingPage() {
     return (
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-          <p className="text-gray-500">Memuat informasi billing...</p>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Memuat informasi billing...</p>
         </div>
       </div>
     );
@@ -217,10 +217,10 @@ export default function BillingPage() {
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6 text-center space-y-4">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
             <div>
               <h3 className="font-semibold text-lg">Gagal Memuat Billing</h3>
-              <p className="text-gray-500 text-sm mt-1">{error}</p>
+              <p className="text-muted-foreground text-sm mt-1">{error}</p>
             </div>
             <Button onClick={() => refetch()} variant="outline">
               Coba Lagi
@@ -237,10 +237,10 @@ export default function BillingPage() {
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6 text-center space-y-4">
-            <CreditCard className="h-12 w-12 text-gray-400 mx-auto" />
+            <CreditCard className="h-12 w-12 text-muted-foreground mx-auto" />
             <div>
               <h3 className="font-semibold text-lg">Data Tidak Tersedia</h3>
-              <p className="text-gray-500 text-sm mt-1">
+              <p className="text-muted-foreground text-sm mt-1">
                 Tidak dapat memuat informasi billing.
               </p>
             </div>
@@ -258,13 +258,13 @@ export default function BillingPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge className="bg-green-100 text-green-700">Aktif</Badge>;
+        return <Badge className="bg-green-100 text-foreground">Aktif</Badge>;
       case "trial":
-        return <Badge className="bg-blue-100 text-blue-700">Trial</Badge>;
+        return <Badge className="bg-blue-100 text-primary">Trial</Badge>;
       case "expired":
-        return <Badge className="bg-red-100 text-red-700">Expired</Badge>;
+        return <Badge className="bg-red-100 text-destructive">Expired</Badge>;
       case "cancelled":
-        return <Badge className="bg-gray-100 text-gray-700">Dibatalkan</Badge>;
+        return <Badge className="bg-muted text-foreground">Dibatalkan</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -273,9 +273,9 @@ export default function BillingPage() {
   return (
     <PermissionGuard allowedRoles={["owner"]} fallback={
       <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <CreditCard className="h-16 w-16 text-gray-300 mb-4" />
-        <h2 className="text-xl font-semibold text-gray-900">Akses Terbatas</h2>
-        <p className="text-gray-500 mt-2 max-w-md">
+          <CreditCard className="h-16 w-16 text-muted-foreground mb-4" />
+        <h2 className="text-xl font-semibold text-foreground">Akses Terbatas</h2>
+        <p className="text-muted-foreground mt-2 max-w-md">
           Hanya owner yang dapat mengakses billing dan subscription. 
           Hubungi owner untuk informasi lebih lanjut.
         </p>
@@ -288,8 +288,8 @@ export default function BillingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: easeOut }}
         >
-          <h1 className="text-2xl font-bold text-gray-900">Billing & Subscription</h1>
-          <p className="text-gray-500 mt-1">Kelola langganan dan pembayaran Anda</p>
+          <h1 className="text-2xl font-bold text-foreground">Billing & Subscription</h1>
+          <p className="text-muted-foreground mt-1">Kelola langganan dan pembayaran Anda</p>
         </motion.div>
 
         {/* Current Plan Card */}
@@ -299,7 +299,7 @@ export default function BillingPage() {
           transition={{ duration: 0.5, delay: 0.1, ease: easeOut }}
         >
           <Card className="overflow-hidden">
-            <div className={`h-2 bg-gradient-to-r ${currentPlanData.color}`} />
+          <div className={`h-2 bg-gradient-to-r ${currentPlanData.color}`} />
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
@@ -313,22 +313,22 @@ export default function BillingPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-3xl font-bold">{formatCurrency(subscription.price)}</p>
-                  <p className="text-sm text-gray-500">/bulan</p>
+                  <p className="text-sm text-muted-foreground">/bulan</p>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Renewal Info */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <p className="font-medium">
-                      {subscription.status === "trial" ? "Trial Berakhir" : "Perpanjangan Berikutnya"}
-                    </p>
-                    <p className="text-sm text-gray-500">{formatDate(nextBillingDate)}</p>
+               <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div className="flex items-center gap-3">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">
+                        {subscription.status === "trial" ? "Trial Berakhir" : "Perpanjangan Berikutnya"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{formatDate(nextBillingDate)}</p>
+                    </div>
                   </div>
-                </div>
                 <Badge variant="outline">{subscription.daysUntilRenewal} hari lagi</Badge>
               </div>
 
@@ -337,46 +337,46 @@ export default function BillingPage() {
                 <h4 className="font-semibold">Penggunaan Bulan Ini</h4>
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Cabang</span>
-                      <span className="font-medium">
-                        {usage.branches.used} / {usage.branches.limit}
-                      </span>
-                    </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Cabang</span>
+                        <span className="font-medium">
+                          {usage.branches.used} / {usage.branches.limit}
+                        </span>
+                      </div>
                     <Progress 
                       value={typeof usage.branches.limit === "number" ? usage.branches.percentage : 0} 
                       className="h-2" 
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Staff</span>
-                      <span className="font-medium">
-                        {usage.staff.used} / {usage.staff.limit}
-                      </span>
-                    </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Staff</span>
+                        <span className="font-medium">
+                          {usage.staff.used} / {usage.staff.limit}
+                        </span>
+                      </div>
                     <Progress 
                       value={typeof usage.staff.limit === "number" ? usage.staff.percentage : 0} 
                       className="h-2" 
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Order</span>
-                      <span className="font-medium">
-                        {usage.orders.used.toLocaleString()} / {
-                          typeof usage.orders.limit === "number" 
-                            ? usage.orders.limit.toLocaleString() 
-                            : usage.orders.limit
-                        }
-                      </span>
-                    </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Order</span>
+                        <span className="font-medium">
+                          {usage.orders.used.toLocaleString()} / {
+                            typeof usage.orders.limit === "number" 
+                              ? usage.orders.limit.toLocaleString() 
+                              : usage.orders.limit
+                          }
+                        </span>
+                      </div>
                     <Progress 
                       value={typeof usage.orders.limit === "number" ? usage.orders.percentage : 0}
                       className="h-2"
                     />
                     {typeof usage.orders.limit === "number" && usage.orders.percentage > 80 && (
-                      <div className="flex items-center gap-1 text-xs text-amber-600">
+                      <div className="flex items-center gap-1 text-xs text-primary">
                         <AlertTriangle className="h-3 w-3" />
                         <span>Mendekati batas kuota</span>
                       </div>
@@ -394,9 +394,9 @@ export default function BillingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2, ease: easeOut }}
         >
-          <h2 className="text-xl font-semibold mb-4">Paket Langganan</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {plans.map((plan, index) => {
+                  <h2 className="text-xl font-semibold mb-4">Paket Langganan</h2>
+                   <div className="grid md:grid-cols-3 gap-6 items-stretch">
+                    {plans.map((plan, index) => {
               const Icon = plan.icon;
               const isCurrentPlan = plan.id === currentPlan;
               const currentPlanIndex = plans.findIndex((p) => p.id === currentPlan);
@@ -410,51 +410,53 @@ export default function BillingPage() {
                   animate="visible"
                   transition={{ delay: 0.3 + index * 0.1 }}
                 >
-                  <Card className={`relative h-full ${plan.popular ? "border-purple-500 border-2" : ""} ${isCurrentPlan ? "bg-gray-50" : ""}`}>
+                  <Card className={`group relative flex flex-col h-full ${plan.popular ? "border-purple-500 border-2" : ""} ${isCurrentPlan ? "bg-muted" : ""}`}>
                     {plan.popular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-purple-500 text-white">
+                      <div className="absolute top-3 right-3 z-20">
+                        <Badge className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold text-white shadow-lg bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-500 animate-pulse">
                           <Sparkles className="h-3 w-3 mr-1" />
                           Populer
                         </Badge>
                       </div>
                     )}
                     <CardHeader className="text-center">
-                      <div className={`mx-auto p-3 rounded-xl bg-gradient-to-br ${plan.color} text-white mb-2`}>
-                        <Icon className="h-6 w-6" />
+                       <div className={`mx-auto p-3 rounded-2xl bg-gradient-to-br ${plan.color} text-white mb-2 transform transition-transform group-hover:scale-105`}>
+                        <Icon className="h-8 w-8" />
                       </div>
                       <CardTitle>{plan.name}</CardTitle>
                       <div className="mt-2">
                         {plan.isFree ? (
                           <>
-                            <span className="text-3xl font-bold text-green-600">GRATIS</span>
-                            <p className="text-sm text-gray-500 mt-1">Selamanya</p>
+                            <span className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-green-400">GRATIS</span>
+                            <p className="text-sm text-muted-foreground mt-1">Selamanya</p>
                           </>
                         ) : plan.price === -1 ? (
                           <>
                             <span className="text-2xl font-bold">Hubungi Kami</span>
-                            <p className="text-sm text-gray-500 mt-1">Custom pricing</p>
+                            <p className="text-sm text-muted-foreground mt-1">Custom pricing</p>
                           </>
                         ) : (
                           <>
                             <span className="text-3xl font-bold">{formatCurrency(plan.price)}</span>
-                            <span className="text-gray-500">/bulan</span>
+                            <span className="text-muted-foreground">/bulan</span>
                           </>
                         )}
                       </div>
-                      <CardDescription className="mt-2">{plan.description}</CardDescription>
+                      <CardDescription className="mt-2 text-muted-foreground">{plan.description}</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                      <CardContent>
                       <ul className="space-y-3">
                         {plan.features.map((feature) => (
                           <li key={feature} className="flex items-center gap-2 text-sm">
-                            <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                            <span>{feature}</span>
+                            <span className={`p-1 rounded-md bg-gradient-to-r ${plan.color} text-white inline-flex`}>
+                              <Check className="h-4 w-4" />
+                            </span>
+                            <span className="text-muted-foreground">{feature}</span>
                           </li>
                         ))}
                       </ul>
                     </CardContent>
-                    <CardFooter>
+                    <CardFooter className="mt-auto">
                       {isCurrentPlan ? (
                         <Button className="w-full" disabled>
                           <Check className="h-4 w-4 mr-2" />
@@ -478,9 +480,9 @@ export default function BillingPage() {
                           onClick={() => handleUpgrade(plan.id)}
                           disabled={isSubscribing}
                         >
-                          {isSubscribing ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
+                         {isSubscribing ? (
+                             <Loader2 className="h-4 w-4 mr-2 animate-spin text-primary" />
+                           ) : (
                             <>
                               {plan.isFree ? "Mulai Gratis" : "Upgrade"}
                               <ArrowRight className="h-4 w-4 ml-2" />
@@ -504,11 +506,11 @@ export default function BillingPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-gray-500" />
-                Riwayat Invoice
-              </CardTitle>
-              <CardDescription>Daftar invoice dan pembayaran</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                 <Receipt className="h-5 w-5 text-muted-foreground" />
+                 Riwayat Invoice
+               </CardTitle>
+               <CardDescription className="text-muted-foreground">Daftar invoice dan pembayaran</CardDescription>
             </CardHeader>
             <CardContent>
               {invoices.length > 0 ? (
@@ -532,13 +534,13 @@ export default function BillingPage() {
                         <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
                         <TableCell className="text-center">
                           {invoice.status === "paid" && (
-                            <Badge className="bg-green-100 text-green-700">Lunas</Badge>
+                            <Badge className="bg-green-100 text-foreground">Lunas</Badge>
                           )}
                           {invoice.status === "pending" && (
-                            <Badge className="bg-amber-100 text-amber-700">Pending</Badge>
+                            <Badge className="bg-amber-100 text-primary">Pending</Badge>
                           )}
                           {invoice.status === "failed" && (
-                            <Badge className="bg-red-100 text-red-700">Gagal</Badge>
+                            <Badge className="bg-red-100 text-destructive">Gagal</Badge>
                           )}
                         </TableCell>
                         <TableCell>
@@ -555,11 +557,11 @@ export default function BillingPage() {
                   </TableBody>
                 </Table>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Receipt className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p>Belum ada riwayat invoice</p>
-                  <p className="text-sm mt-1">Invoice akan muncul setelah pembayaran pertama</p>
-                </div>
+                   <div className="text-center py-8 text-muted-foreground">
+                   <Receipt className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                   <p>Belum ada riwayat invoice</p>
+                   <p className="text-sm mt-1">Invoice akan muncul setelah pembayaran pertama</p>
+                 </div>
               )}
             </CardContent>
           </Card>
@@ -574,7 +576,7 @@ export default function BillingPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-gray-500" />
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
                 Metode Pembayaran
               </CardTitle>
               <CardDescription>Kelola metode pembayaran Anda</CardDescription>
@@ -582,20 +584,20 @@ export default function BillingPage() {
             <CardContent>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <CreditCard className="h-6 w-6 text-blue-600" />
-                  </div>
+                 <div className="p-2 bg-muted rounded-lg">
+                     <CreditCard className="h-6 w-6 text-primary" />
+                   </div>
                   <div>
                     <p className="font-medium">QRIS / Virtual Account</p>
-                    <p className="text-sm text-gray-500">Powered by Mayar</p>
+                    <p className="text-sm text-muted-foreground">Powered by Mayar</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-green-600 border-green-600">
-                  <Shield className="h-3 w-3 mr-1" />
+                <Badge variant="outline" className="text-foreground border-foreground/20">
+                  <Shield className="h-3 w-3 mr-1 text-foreground" />
                   Secure
                 </Badge>
               </div>
-              <p className="text-sm text-gray-500 mt-4">
+              <p className="text-sm text-muted-foreground mt-4">
                 Pembayaran diproses melalui Mayar Payment Gateway. Anda akan menerima invoice 
                 setiap bulan via email dan WhatsApp.
               </p>
@@ -614,22 +616,22 @@ export default function BillingPage() {
               </DialogDescription>
             </DialogHeader>
             {selectedPlan && (
-              <div className="py-4">
-                <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Paket Baru</span>
-                    <span className="font-medium">{plans.find((p) => p.id === selectedPlan)?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Harga/bulan</span>
-                    <span className="font-medium">
-                      {plans.find((p) => p.id === selectedPlan)?.isFree 
-                        ? "GRATIS" 
-                        : formatCurrency(plans.find((p) => p.id === selectedPlan)?.price || 0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+               <div className="py-4">
+                 <div className="p-4 bg-muted rounded-lg space-y-2">
+                   <div className="flex justify-between">
+                     <span className="text-muted-foreground">Paket Baru</span>
+                     <span className="font-medium">{plans.find((p) => p.id === selectedPlan)?.name}</span>
+                   </div>
+                   <div className="flex justify-between">
+                     <span className="text-muted-foreground">Harga/bulan</span>
+                     <span className="font-medium">
+                       {plans.find((p) => p.id === selectedPlan)?.isFree 
+                         ? "GRATIS" 
+                         : formatCurrency(plans.find((p) => p.id === selectedPlan)?.price || 0)}
+                     </span>
+                   </div>
+                 </div>
+               </div>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsUpgradeDialogOpen(false)}>
@@ -650,7 +652,7 @@ export default function BillingPage() {
           <DialogContent className="sm:max-w-[450px]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-blue-600" />
+                <CreditCard className="h-5 w-5 text-primary" />
                 Pembayaran Subscription
               </DialogTitle>
               <DialogDescription>
@@ -658,19 +660,19 @@ export default function BillingPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-800 mb-3">
+               <div className="p-4 bg-muted/60 rounded-lg border border-muted/40">
+                 <p className="text-sm text-primary mb-3">
                   Klik tombol di bawah untuk membuka halaman pembayaran. Anda dapat membayar menggunakan:
                 </p>
-                <ul className="text-sm text-blue-700 space-y-1 ml-4 list-disc">
+                <ul className="text-sm text-primary space-y-1 ml-4 list-disc">
                   <li>QRIS (Scan dengan aplikasi e-wallet)</li>
                   <li>Virtual Account (Transfer Bank)</li>
                 </ul>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Shield className="h-4 w-4 text-green-500" />
-                <span>Pembayaran aman & terenkripsi via Mayar</span>
-              </div>
+                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Shield className="h-4 w-4 text-foreground" />
+                    <span>Pembayaran aman & terenkripsi via Mayar</span>
+                  </div>
             </div>
             <DialogFooter className="flex-col sm:flex-row gap-2">
               <Button 

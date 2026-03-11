@@ -19,8 +19,11 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import { motion, useAnimation, useInView, type Variants, type Easing } from "framer-motion";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
@@ -368,6 +371,19 @@ function TestimonialCarousel() {
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { data: session, isPending: sessionLoading } = useSession();
+  const router = useRouter();
+
+  const handlePlanClick = (planName: string) => {
+    if (sessionLoading) return; // avoid flicker: ignore clicks while session is resolving
+    // If user logged in -> go to billing page
+    if (session) {
+      router.push('/dashboard/billing');
+      return;
+    }
+    // Not logged in -> go to login page, include next param to redirect after login
+    router.push(`/login?next=/dashboard/billing`);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -378,7 +394,15 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="min-h-screen bg-background overflow-x-hidden">
+        {sessionLoading && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur">
+            <div className="inline-flex items-center gap-3 rounded-lg bg-card p-4 shadow-lg border border-border">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="text-sm text-foreground">Memeriksa sesi...</span>
+            </div>
+          </div>
+        )}
       {/* Navigation */}
       <motion.nav 
         initial={{ y: -100 }}
@@ -882,7 +906,7 @@ export default function LandingPage() {
           </motion.div>
 
           <motion.div 
-            className="mt-16 grid grid-cols-1 gap-8 lg:grid-cols-3"
+            className="mt-16 grid grid-cols-1 gap-8 lg:grid-cols-3 items-stretch"
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
@@ -893,54 +917,48 @@ export default function LandingPage() {
                 key={plan.name}
                 variants={fadeInUp}
               >
-                <Card
-                  className={`relative h-full transition-all duration-300 hover:shadow-xl ${
-                    plan.popular
-                      ? "border-primary shadow-xl ring-2 ring-primary scale-105 lg:scale-110"
-                      : "border-border hover:border-primary/50"
-                  }`}
-                >
+                <Card className={`relative flex flex-col h-full transition-all duration-300 ${
+                    plan.popular ? "border-primary shadow-xl ring-2 ring-primary scale-105 lg:scale-110" : "border-border hover:border-primary/50"
+                  }`}>
                   {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary shadow-lg px-4">
+                    <div className="absolute top-3 right-3 z-20">
+                      <Badge className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold text-white shadow-lg bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-500 animate-pulse">
+                        <Star className="h-4 w-4 mr-2" />
                         Paling Populer
                       </Badge>
                     </div>
                   )}
                   <CardHeader className="text-center pb-2 pt-8">
                     <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                    <CardDescription className="text-base">{plan.description}</CardDescription>
+                    <CardDescription className="text-base text-muted-foreground">{plan.description}</CardDescription>
                     <div className="mt-6">
-                      <span className="text-5xl font-bold text-foreground">{plan.price}</span>
+                      <span className="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-pink-500">{plan.price}</span>
                       <span className="text-muted-foreground text-lg">{plan.period}</span>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-6">
-                    <ul className="space-y-4 mb-8">
+                  <CardContent className="pt-6 flex flex-col h-full">
+                    <ul className="space-y-4 mb-8 flex-grow">
                       {plan.features.map((feature) => (
                         <li key={feature} className="flex items-center gap-3">
-                          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                          </div>
+                          <span className="p-1 rounded-md bg-gradient-to-r from-primary/30 to-primary/10 text-white inline-flex">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </span>
                           <span className="text-muted-foreground">{feature}</span>
                         </li>
                       ))}
                     </ul>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <Button
-                        className={`w-full h-12 text-base ${
-                          plan.popular 
-                            ? "bg-primary hover:bg-primary/90 shadow-lg" 
-                            : ""
-                        }`}
-                        variant={plan.popular ? "default" : "outline"}
-                      >
-                        {plan.cta}
-                      </Button>
-                    </motion.div>
+                    <div className="mt-auto">
+                      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button
+                          type="button"
+                          onClick={() => handlePlanClick(plan.name)}
+                          className={`w-full h-12 text-base ${plan.popular ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:opacity-95 shadow-lg text-white" : ""}`}
+                          variant={plan.popular ? "default" : "outline"}
+                        >
+                          {plan.cta}
+                        </Button>
+                      </motion.div>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
