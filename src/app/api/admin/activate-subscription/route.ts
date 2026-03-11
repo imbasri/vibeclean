@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, subscriptions, organizations } from "@/lib/db";
 import { eq } from "drizzle-orm";
+import { checkAdminAccess } from "@/lib/admin-access";
 
 // Manual activation endpoint - for admin/founder use
 // POST /api/admin/activate-subscription
 export async function POST(request: NextRequest) {
   try {
+    // Check admin access
+    const isAdmin = await checkAdminAccess();
+    
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { organizationId, plan = "pro" } = body;
 

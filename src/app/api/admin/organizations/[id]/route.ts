@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import { isSuperAdmin } from "@/lib/admin";
+import { checkAdminAccess } from "@/lib/admin-access";
 import {
   db,
   organizations,
@@ -14,14 +12,6 @@ import {
 } from "@/lib/db";
 import { eq, sql, desc, count, and } from "drizzle-orm";
 
-// Helper to get session
-async function getSession() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-  return session;
-}
-
 // GET /api/admin/organizations/[id] - Get organization details
 export async function GET(
   request: NextRequest,
@@ -29,14 +19,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is super admin
-    if (!isSuperAdmin(session.user.email)) {
+    
+    // Check admin access
+    const isAdmin = await checkAdminAccess();
+    
+    if (!isAdmin) {
       return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
     }
 
