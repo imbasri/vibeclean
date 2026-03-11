@@ -64,6 +64,8 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
     
+    console.log("[Mayar Webhook] Raw body:", rawBody);
+    
     // Get signature from headers (Mayar may use different header names)
     const signature = 
       request.headers.get("x-mayar-signature") ||
@@ -89,14 +91,31 @@ export async function POST(request: NextRequest) {
       // Mayar sends payload as stringified JSON in some cases
       const parsed = JSON.parse(rawBody);
       
-      // Check if payload is nested (from webhook history structure)
+      console.log("[Mayar Webhook] Parsed payload:", JSON.stringify(parsed).substring(0, 500));
+      
+      // Handle different Mayar payload formats
+      // Format 1: Direct { event, data }
+      // Format 2: { payload: "{...}" } - nested string
+      // Format 3: { data: {...} } - Mayar might send data directly
       if (parsed.payload && typeof parsed.payload === "string") {
         webhookData = JSON.parse(parsed.payload);
+      } else if (parsed.data && parsed.data.transactionId) {
+        // Format with data wrapper
+        webhookData = {
+          event: parsed.event || "payment.received",
+          data: parsed.data
+        };
+      } else if (parsed.transactionId) {
+        // Direct transaction data
+        webhookData = {
+          event: parsed.event || "payment.received",
+          data: parsed
+        };
       } else {
         webhookData = parsed;
       }
     } catch {
-      console.error("Failed to parse webhook payload:", rawBody);
+      console.error("[Mayar Webhook] Failed to parse webhook payload:", rawBody);
       return NextResponse.json(
         { error: "Invalid payload" },
         { status: 400 }
@@ -252,12 +271,39 @@ async function updateOrderToPaid(
  * by checking custom_field or extraData
  */
 function getPaymentType(data: MayarWebhookData["data"]): "subscription" | "order" {
+  console.log("[Mayar Webhook] Determining payment type from:", JSON.stringify(data).substring(0, 300));
+  
+  // Check productName/description for subscription keywords
+  if (data.productName) {
+    const name = data.productName.toLowerCase();
+    if (name.includes("langganan") || name.includes("subscription") || name.includes("paket") || name.includes("pro") || name.includes("enterprise")) {
+      console.log("[Mayar Webhook] Detected as subscription based on productName");
+      return "subscription";
+    }
+  }
+
+  // Check description (items array might have description)
+  if (data.productName && data.productName.toLowerCase().includes("vibeclean")) {
+    console.log("[Mayar Webhook] Detected as subscription based on Vibeclean in productName");
+    return "subscription";
+  }
+  
   // Check custom_field array
   if (data.custom_field) {
     const typeField = data.custom_field.find(
       (f) => f.key === "type" || f.key === "payment_type"
     );
     if (typeField?.value === "subscription") {
+      console.log("[Mayar Webhook] Detected as subscription based on custom_field");
+      return "subscription";
+    }
+    
+    // Also check for organization_id in custom_field (subscription payments have this)
+    const orgField = data.custom_field.find(
+      (f) => f.key === "organization_id" || f.key === "orgId"
+    );
+    if (orgField) {
+      console.log("[Mayar Webhook] Found organization_id in custom_field, treating as subscription");
       return "subscription";
     }
   }
@@ -265,16 +311,25 @@ function getPaymentType(data: MayarWebhookData["data"]): "subscription" | "order
   // Check extraData object
   if (data.extraData) {
     if (data.extraData.type === "subscription" || data.extraData.payment_type === "subscription") {
+      console.log("[Mayar Webhook] Detected as subscription based on extraData");
+      return "subscription";
+    }
+    
+    // Check for organization_id in extraData
+    if (data.extraData.organization_id || data.extraData.orgId) {
+      console.log("[Mayar Webhook] Found organization_id in extraData, treating as subscription");
       return "subscription";
     }
   }
 
   // Check productType from Mayar
   if (data.productType?.toLowerCase().includes("subscription")) {
+    console.log("[Mayar Webhook] Detected as subscription based on productType");
     return "subscription";
   }
 
   // Default to order payment
+  console.log("[Mayar Webhook] Defaulting to order payment");
   return "order";
 }
 
