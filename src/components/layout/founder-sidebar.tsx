@@ -13,6 +13,9 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Percent,
+  Wallet,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,6 +43,21 @@ const founderNavItems = [
     title: "Subscriptions",
     href: "/founder/dashboard/subscriptions",
     icon: CreditCard,
+  },
+  {
+    title: "Transaction Fee",
+    href: "/founder/dashboard/transaction-fee",
+    icon: Percent,
+  },
+  {
+    title: "Withdrawals",
+    href: "/founder/dashboard/withdrawals",
+    icon: Wallet,
+  },
+  {
+    title: "Add-ons",
+    href: "/founder/dashboard/addons",
+    icon: Package,
   },
 ];
 
