@@ -2,9 +2,12 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
 
+// Use DATABASE_URL_SSL on Heroku (with SSL), fallback to DATABASE_URL locally
+const connectionString = process.env.DATABASE_URL_SSL || process.env.DATABASE_URL;
+
 // Create a PostgreSQL connection pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
 });
 
 // Create the drizzle database instance with schema
