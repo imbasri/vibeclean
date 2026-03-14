@@ -141,9 +141,14 @@ export default function BalancePage() {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Gagal Memuat Data</h2>
-        <p className="text-gray-500 mb-4">{error}</p>
-        <Button onClick={refetch} variant="outline">Coba Lagi</Button>
+        <h2 className="text-xl font-semibold mb-2">Gagal Memuat Data Saldo</h2>
+        <p className="text-gray-500 mb-4 max-w-md">{error}</p>
+        <div className="flex gap-2">
+          <Button onClick={refetch} variant="outline">Coba Lagi</Button>
+          <Button onClick={() => window.location.href = '/dashboard'} variant="default">
+            Kembali ke Dashboard
+          </Button>
+        </div>
       </div>
     );
   }

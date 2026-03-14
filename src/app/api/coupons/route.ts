@@ -257,8 +257,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
+    // Get ID from query params or request body
+    const { searchParams } = new URL(request.url);
+    const queryId = searchParams.get("id");
+    
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const bodyId = body.id;
+    const id = queryId || bodyId;
+    const updateData = body.id ? body : { ...body, id: undefined };
+    
+    delete updateData.id; // Remove id from update data
 
     if (!id) {
       return NextResponse.json({ error: "Coupon ID required" }, { status: 400 });
@@ -276,7 +284,7 @@ export async function PUT(request: NextRequest) {
 
     // Build update object
     const updateFields: Record<string, unknown> = { ...data, updatedAt: new Date() };
-    
+
     if (data.value) updateFields.value = String(data.value);
     if (data.minOrderAmount) updateFields.minOrderAmount = String(data.minOrderAmount);
     if (data.maxDiscount) updateFields.maxDiscount = String(data.maxDiscount);

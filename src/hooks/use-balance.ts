@@ -51,7 +51,9 @@ export function useBalance(): UseBalanceReturn {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch balance");
+        // Use detailed message if available
+        const errorMessage = errorData.message || errorData.error || "Failed to fetch balance";
+        throw new Error(errorMessage);
       }
 
       const data: BalanceResponse = await response.json();

@@ -4,6 +4,11 @@ import type { NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Skip auth for UploadThing API routes
+  if (pathname.startsWith("/api/uploadthing")) {
+    return NextResponse.next();
+  }
+
   // Redirect /admin to /founder/dashboard
   if (pathname.startsWith("/admin")) {
     const dashboardUrl = new URL("/founder/dashboard", request.url);

@@ -522,7 +522,10 @@ export default function SettingsPage() {
                     {/* Avatar Section */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                       <Avatar className="h-20 w-20 ring-4 ring-white dark:ring-gray-700 shadow-sm">
-                        <AvatarImage src={profile?.image || "/avatars/user.jpg"} />
+                        <AvatarImage 
+                          src={profile?.image ? `${profile.image}?t=${new Date().getTime()}` : "/avatars/user.jpg"} 
+                          alt="Profile"
+                        />
                         <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                           {profileForm.name.charAt(0)}
                         </AvatarFallback>
@@ -534,7 +537,10 @@ export default function SettingsPage() {
                             onClientUploadComplete={(res) => {
                               const imageUrl = res?.[0]?.url;
                               if (imageUrl) {
+                                // Update profile with new image
                                 updateProfile({ image: imageUrl }).then(() => {
+                                  // Force refresh by updating form state too
+                                  setProfileForm(prev => ({ ...prev, image: imageUrl }));
                                   gooeyToast.success("Foto Diubah", { description: "Foto profil berhasil diperbarui" });
                                 });
                               }

@@ -20,9 +20,9 @@ interface SubscriptionState {
 }
 
 const PLAN_LIMITS: Record<SubscriptionPlan, { branches: number; staff: number; orders: number }> = {
-  starter: { branches: 1, staff: 3, orders: 100 },
-  pro: { branches: 5, staff: 10, orders: -1 }, // -1 = unlimited
-  enterprise: { branches: -1, staff: -1, orders: -1 },
+  starter: { branches: 1, staff: 3, orders: 100 }, // Starter: 1 branch, 3 staff, 100 orders/month
+  pro: { branches: 5, staff: 10, orders: -1 }, // Pro: 5 branches, 10 staff, unlimited orders
+  enterprise: { branches: -1, staff: -1, orders: -1 }, // Enterprise: unlimited everything
 };
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
@@ -76,37 +76,66 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
   canAccessFeature: (feature) => {
     const { plan } = get();
+
+    // ============================================
+    // BASIC FEATURES - ALL PLANS (Including Starter)
+    // ============================================
+    // These are core business features every laundry needs
+    if (feature === 'dashboard') return true; // All plans get dashboard
+    if (feature === 'pos') return true; // POS is core feature
+    if (feature === 'orders') return true; // Order management is essential
+    if (feature === 'services') return true; // Service management
+    if (feature === 'customers') return true; // Customer database
+    if (feature === 'settings') return true; // Basic settings
+    if (feature === 'billing') return true; // All plans need billing access (to upgrade/manage)
+    if (feature === 'balance') return true; // Balance & withdrawals for all
     
-    // Starter features
-    if (feature === 'pos') return true;
-    if (feature === 'orders') return true;
-    if (feature === 'customers') return true;
-    if (feature === 'services') return true;
-    if (feature === 'reports') return true;
+    // Member & Loyalty features - Available for ALL plans
+    // This helps small businesses grow with customer retention
+    if (feature === 'members') return true; // Member packages (all plans)
+    if (feature === 'loyalty') return true; // Loyalty coupons (all plans)
+    if (feature === 'discounts') return true; // Discount management (all plans)
     
-    // Pro features
+    // ============================================
+    // PRO FEATURES (Starter: ❌ | Pro/Enterprise: ✅)
+    // ============================================
+    // Advanced business management features
     if (feature === 'branches') {
+      // Multi-branch management (Starter limited to 1 branch)
       return plan === 'pro' || plan === 'enterprise';
     }
     if (feature === 'staff') {
+      // Staff management with roles (Starter has basic staff limit)
       return plan === 'pro' || plan === 'enterprise';
     }
-    if (feature === 'member-packages') {
-      return plan === 'pro' || plan === 'enterprise';
-    }
-    if (feature === 'loyalty') {
+    if (feature === 'reports') {
+      // Advanced analytics & reports
       return plan === 'pro' || plan === 'enterprise';
     }
     
-    // Enterprise features
+    // ============================================
+    // ENTERPRISE FEATURES (Starter/Pro: ❌ | Enterprise: ✅)
+    // ============================================
+    // Premium features for large-scale operations
     if (feature === 'analytics') {
+      // Advanced business intelligence
       return plan === 'enterprise';
     }
     if (feature === 'custom-domain') {
+      // White-label custom domain
       return plan === 'enterprise';
     }
-    
-    return false;
+    if (feature === 'api-access') {
+      // API access for integrations
+      return plan === 'enterprise';
+    }
+    if (feature === 'priority-support') {
+      // Priority WhatsApp/phone support
+      return plan === 'enterprise';
+    }
+
+    // Default: allow access (for unknown features)
+    return true;
   },
 
   canAddBranch: () => {

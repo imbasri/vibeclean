@@ -118,6 +118,9 @@ export function useProfile(): UseProfileReturn {
         // Update local state with new profile data
         if (result.profile) {
           setProfile((prev) => (prev ? { ...prev, ...result.profile } : result.profile));
+        } else if (data.image) {
+          // If only image was updated, update it directly
+          setProfile((prev) => (prev ? { ...prev, image: data.image! } : prev));
         }
 
         return { success: true };

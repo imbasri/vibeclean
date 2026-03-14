@@ -87,11 +87,15 @@ export function PaymentQRISDialog({
     setError(null);
 
     try {
-      const response = await fetch("/api/payments/create", {
+      // Use public/create API which integrates with Mayar QRIS
+      const response = await fetch("/api/payments/public/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId,
+          amount,
+          customerName: customerName || "Pelanggan",
+          customerPhone: "08000000000", // Default phone for walk-in customers
           paymentType: "qris",
           expiredInMinutes: 30, // 30 minutes expiration
         }),

@@ -11,9 +11,17 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwind-css)](https://tailwindcss.com)
 [![License](https://img.shields.io/badge/License-Private-green)](LICENSE)
 
-[Fitur](#-fitur) • [Teknologi](#-tech-stack) • [Cara Menggunakan](#-cara-menggunakan) • [Struktur Folder](#-struktur-folder) • [API Documentation](#-api-documentation)
+[Fitur](#-fitur) • [Teknologi](#-tech-stack) • [Demo](#-demo-application) • [Cara Menggunakan](#-cara-menggunakan) • [Struktur Folder](#-struktur-folder) • [API Documentation](#-api-documentation) • [Presentation](#-presentation)
 
 </div>
+
+---
+
+## 🎥 Demo Application
+
+Watch VibeClean in action with Mayar Payment Gateway integration:
+
+- 🎬 **[Demo: VibeClean with Mayar QRIS Payment](https://www.awesomescreenshot.com/video/50438843?key=4701d2203dd365ff6a9e992ed5c2fd1f)** - Complete POS flow with QRIS payment integration
 
 ---
 
@@ -437,6 +445,14 @@ For support, email support@vibeclean.id or join our WhatsApp community.
 - [Drizzle ORM](https://orm.drizzle.team) - TypeScript ORM
 - [Mayar](https://mayar.id) - Payment Gateway
 - [Vercel](https://vercel.com) - Deployment Platform
+
+---
+
+## 📊 Presentation
+
+View our project presentation and pitch deck:
+
+- 🎯 **[VibeClean Presentation](https://chat.z.ai/space/f1q8c21jjz11-art)** - Project overview, features, and business model
 
 ---
 

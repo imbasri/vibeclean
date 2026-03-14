@@ -52,7 +52,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (!organization) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+      return NextResponse.json(
+        { 
+          error: "Organization not found",
+          message: "Anda belum tergabung dengan organisasi laundry manapun. Silakan buat organisasi baru atau hubungi admin untuk diundang.",
+          code: "NO_ORGANIZATION"
+        }, 
+        { status: 404 }
+      );
     }
 
     const organizationId = organization.id;

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
+import { useSubscriptionStore } from '@/stores/subscription-store';
 import { ThemeToggleSimple } from '@/components/common/theme-toggle';
 import {
     SidebarProvider,
@@ -59,6 +60,7 @@ interface NavItem {
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     const pathname = usePathname();
     const { activeBranch, canAccessFeature, user, logout } = useAuth();
+    const { plan, canAccessFeature: canAccessSubscriptionFeature } = useSubscriptionStore();
     const [mounted, setMounted] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -69,6 +71,16 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     if (!mounted) {
         return null;
     }
+
+    // Combined feature access check (role + subscription)
+    const canAccess = (feature: string) => {
+        // Check subscription plan first
+        if (!canAccessSubscriptionFeature(feature)) {
+            return false;
+        }
+        // Then check role permissions
+        return canAccessFeature(feature as any);
+    };
 
     const NAV_ITEMS: NavItem[] = [
         {
@@ -152,7 +164,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     ];
 
     const filteredNavItems = NAV_ITEMS.filter((item) =>
-        canAccessFeature(item.feature),
+        canAccess(item.feature),
     ).map((item) => ({
         title: item.title,
         url: item.url,
