@@ -145,8 +145,13 @@ export async function POST(
       qrData = `${qrData}${qrData.includes('?') ? '&' : '?'}=encodeURIComponent(label)}`;
     }
 
-    // Generate QR code as data URL
-    const qrCodeUrl = await generateQRCodeDataURL(qrData, QR_CODE_SIZES[size]);
+    // Generate QR code as data URL with custom colors
+    const qrCodeUrl = await generateQRCodeDataURL(qrData, QR_CODE_SIZES[size], {
+      color: {
+        dark: branch.qrColorDark || "#000000",
+        light: branch.qrColorLight || "#FFFFFF",
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -179,17 +184,27 @@ export async function POST(
 }
 
 // Simple QR Code generator using qrcode library
-async function generateQRCodeDataURL(data: string, size: number): Promise<string> {
-  // Use async QR code generation
-  const qrDataUrl = await QRCode.toDataURL(data, {
+async function generateQRCodeDataURL(
+  data: string, 
+  size: number,
+  options?: {
+    color?: {
+      dark?: string;
+      light?: string;
+    };
+  }
+): Promise<string> {
+  const qrOptions = {
     width: size,
     margin: 2,
     color: {
-      dark: "#000000",
-      light: "#FFFFFF",
+      dark: options?.color?.dark || "#000000",
+      light: options?.color?.light || "#FFFFFF",
     },
-    errorCorrectionLevel: "M",
-  });
+    errorCorrectionLevel: "M" as const,
+  };
+  
+  const qrDataUrl = await QRCode.toDataURL(data, qrOptions);
   
   return qrDataUrl;
 }

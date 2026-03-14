@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Printer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
@@ -36,25 +36,85 @@ interface ReceiptPrintProps {
 
 export function ReceiptPrint({ data, onClose }: ReceiptPrintProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    // Auto-print when component mounts
-    const timer = setTimeout(() => {
-      if (printRef.current) {
-        window.print();
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
+    setIsClient(true);
   }, []);
 
   const handlePrint = () => {
-    window.print();
+    // Create a new window with only the receipt content for printing
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const printWindow = window.open("", "_blank", "width=400,height=600");
+    if (!printWindow) {
+      // Fallback to regular print if popup is blocked
+      window.print();
+      return;
+    }
+
+    // Get the HTML content
+    const htmlContent = printContent.innerHTML;
+
+    // Write the content to the new window
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Struk - ${data.orderNumber}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; }
+            .text-center { text-align: center; }
+            .mb-4 { margin-bottom: 16px; }
+            .mb-6 { margin-bottom: 24px; }
+            .mt-1 { margin-top: 4px; }
+            .mt-2 { margin-top: 8px; }
+            .mt-4 { margin-top: 16px; }
+            .py-4 { padding-top: 16px; padding-bottom: 16px; }
+            .py-2 { padding-top: 8px; padding-bottom: 8px; }
+            .border-t { border-top: 1px solid #ddd; }
+            .border-b { border-bottom: 1px solid #ddd; }
+            .border-dashed { border-style: dashed; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { text-align: left; padding: 8px 4px; }
+            th { border-bottom: 1px solid #ddd; }
+            .text-right { text-align: right; }
+            .text-sm { font-size: 14px; }
+            .text-xs { font-size: 12px; }
+            .font-bold { font-weight: bold; }
+            .font-medium { font-weight: 500; }
+            .text-gray-500 { color: #666; }
+            .text-gray-400 { color: #999; }
+            @media print {
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${htmlContent}
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              };
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const handleClose = () => {
     onClose();
   };
+
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print:bg-white">
@@ -231,145 +291,10 @@ interface ReceiptDataInput {
 }
 
 export function openReceiptWindow(data: ReceiptDataInput): void {
-  const receiptData: ReceiptData = {
-    ...data,
-    branchName: data.branchName || "VibeClean Laundry",
-    branchPhone: data.branchPhone || "-",
-    estimatedCompletionAt: data.estimatedCompletionAt,
-    createdAt: data.createdAt || new Date(),
-  };
-
-  // Open a new window with the receipt
-  const printWindow = window.open("", "_blank", "width=400,height=600");
+  // Instead of opening new tab, trigger browser print with proper styling
+  // This will use the ReceiptPrint component which is already in the POS
   
-  if (!printWindow) {
-    alert("Please allow popups to print receipts");
-    return;
-  }
-
-  const content = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Receipt - ${receiptData.orderNumber}</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          padding: 20px; 
-          max-width: 300px; 
-          margin: 0 auto;
-          font-size: 12px;
-          line-height: 1.4;
-        }
-        .header { text-align: center; margin-bottom: 16px; }
-        .header h1 { font-size: 18px; margin-bottom: 4px; }
-        .info { border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 12px 0; margin-bottom: 12px; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .items { margin-bottom: 12px; }
-        .item-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .item-name { flex: 1; }
-        .item-qty, .item-price, .item-total { text-align: right; }
-        .item-price { color: #666; font-size: 11px; }
-        .totals { border-top: 1px dashed #ccc; padding-top: 12px; }
-        .total-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .total-final { font-size: 16px; font-weight: bold; }
-        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 11px; }
-        .print-btn { 
-          position: fixed; 
-          top: 20px; 
-          right: 20px;
-          padding: 10px 20px;
-          background: #3b82f6;
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-        }
-        @media print {
-          .print-btn { display: none; }
-          body { padding: 0; }
-        }
-      </style>
-    </head>
-    <body>
-      <button class="print-btn" onclick="window.print()">Cetak</button>
-      
-      <div class="header">
-        <h1>${receiptData.branchName}</h1>
-        <p>${receiptData.branchPhone}</p>
-      </div>
-      
-      <div class="info">
-        <div class="info-row">
-          <span>No. Order</span>
-          <span>${receiptData.orderNumber}</span>
-        </div>
-        <div class="info-row">
-          <span>Tanggal</span>
-          <span>${new Date(receiptData.createdAt).toLocaleDateString("id-ID")}</span>
-        </div>
-        <div class="info-row">
-          <span>Pelanggan</span>
-          <span>${receiptData.customerName}</span>
-        </div>
-      </div>
-      
-      <div class="items">
-        ${receiptData.items.map(item => `
-          <div class="item-row">
-            <div class="item-name">${item.serviceName}<br><span class="item-price">${formatCurrency(item.pricePerUnit)}/${item.unit}</span></div>
-            <div class="item-qty">${item.quantity}</div>
-            <div class="item-total">${formatCurrency(item.subtotal)}</div>
-          </div>
-        `).join("")}
-      </div>
-      
-      <div class="totals">
-        <div class="total-row">
-          <span>Subtotal</span>
-          <span>${formatCurrency(receiptData.subtotal)}</span>
-        </div>
-        ${receiptData.discount > 0 ? `
-        <div class="total-row" style="color: green;">
-          <span>Diskon</span>
-          <span>-${formatCurrency(receiptData.discount)}</span>
-        </div>
-        ` : ""}
-        <div class="total-row total-final">
-          <span>TOTAL</span>
-          <span>${formatCurrency(receiptData.total)}</span>
-        </div>
-        <div class="total-row">
-          <span>Pembayaran</span>
-          <span style="text-transform: capitalize;">${receiptData.paymentMethod}</span>
-        </div>
-        ${receiptData.paymentMethod !== "cash" ? `
-        <div class="total-row">
-          <span>Status</span>
-          <span style="color: orange;">Menunggu Pembayaran</span>
-        </div>
-        ` : ""}
-      </div>
-      
-      <div class="footer">
-        <p>Estimasi Selesai:</p>
-        <p style="font-weight: bold;">
-          ${new Date(receiptData.estimatedCompletionAt).toLocaleDateString("id-ID", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric"
-          })}
-        </p>
-        <p style="margin-top: 16px;">Terima kasih telah menggunakan</p>
-        <p style="font-weight: bold;">VibeClean Laundry</p>
-      </div>
-    </body>
-    </html>
-  `;
-
-  printWindow.document.write(content);
-  printWindow.document.close();
+  // Dispatch custom event to open receipt print in POS
+  const event = new CustomEvent("open-receipt-print", { detail: data });
+  window.dispatchEvent(event);
 }

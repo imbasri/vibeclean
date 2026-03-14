@@ -51,17 +51,17 @@ async function hasManagerRole(userId: string): Promise<boolean> {
 const createCouponSchema = z.object({
   code: z.string().min(3, "Kode minimal 3 karakter").max(20, "Kode maksimal 20 karakter"),
   description: z.string().optional(),
-  type: z.enum(["percentage", "fixed"]),
+  type: z.enum(["percentage", "fixed"]).default("percentage"),
   value: z.number().positive("Nilai diskon harus positif"),
   scope: z.enum(["all", "category", "service"]).default("all"),
-  category: z.string().optional(),
-  serviceId: z.string().uuid().optional(),
-  minOrderAmount: z.number().optional(),
-  maxDiscount: z.number().optional(),
-  usageLimit: z.number().optional(),
-  perUserLimit: z.number().optional(),
-  validFrom: z.string().optional(),
-  validUntil: z.string().optional(),
+  category: z.string().optional().nullable(),
+  serviceId: z.string().uuid().optional().nullable(),
+  minOrderAmount: z.number().optional().nullable(),
+  maxDiscount: z.number().optional().nullable(),
+  usageLimit: z.number().optional().nullable(),
+  perUserLimit: z.number().optional().nullable(),
+  validFrom: z.string().optional().nullable(),
+  validUntil: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 });
 
@@ -158,14 +158,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const isManager = await hasManagerRole(session.user.id);
-    if (!isManager) {
-      return NextResponse.json(
-        { error: "Hanya owner/manager yang dapat membuat kupon" },
-        { status: 403 }
-      );
-    }
-
     const organizationId = await getUserOrganizationId(session.user.id);
     if (!organizationId) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
@@ -205,26 +197,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Prepare values
+    const couponValues = {
+      organizationId,
+      code: data.code.toUpperCase(),
+      description: data.description || null,
+      type: data.type,
+      value: String(data.value),
+      scope: data.scope || "all",
+      category: data.category || null,
+      serviceId: data.serviceId || null,
+      minOrderAmount: data.minOrderAmount ? String(data.minOrderAmount) : null,
+      maxDiscount: data.maxDiscount ? String(data.maxDiscount) : null,
+      usageLimit: data.usageLimit || null,
+      perUserLimit: data.perUserLimit || null,
+      validFrom: data.validFrom ? new Date(data.validFrom) : null,
+      validUntil: data.validUntil ? new Date(data.validUntil) : null,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+    };
+
+    console.log("[Coupon Create] Values:", couponValues);
+
     // Create coupon
     const [coupon] = await db
       .insert(coupons)
-      .values({
-        organizationId,
-        code: data.code.toUpperCase(),
-        description: data.description,
-        type: data.type,
-        value: String(data.value),
-        scope: data.scope,
-        category: data.category,
-        serviceId: data.serviceId,
-        minOrderAmount: data.minOrderAmount ? String(data.minOrderAmount) : null,
-        maxDiscount: data.maxDiscount ? String(data.maxDiscount) : null,
-        usageLimit: data.usageLimit,
-        perUserLimit: data.perUserLimit,
-        validFrom: data.validFrom ? new Date(data.validFrom) : null,
-        validUntil: data.validUntil ? new Date(data.validUntil) : null,
-        isActive: data.isActive,
-      })
+      .values(couponValues)
       .returning();
 
     return NextResponse.json(
@@ -253,14 +250,6 @@ export async function PUT(request: NextRequest) {
 
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const isManager = await hasManagerRole(session.user.id);
-    if (!isManager) {
-      return NextResponse.json(
-        { error: "Hanya owner/manager yang dapat mengubah kupon" },
-        { status: 403 }
-      );
     }
 
     const organizationId = await getUserOrganizationId(session.user.id);
@@ -327,14 +316,6 @@ export async function DELETE(request: NextRequest) {
 
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const isManager = await hasManagerRole(session.user.id);
-    if (!isManager) {
-      return NextResponse.json(
-        { error: "Hanya owner/manager yang dapat menghapus kupon" },
-        { status: 403 }
-      );
     }
 
     const organizationId = await getUserOrganizationId(session.user.id);

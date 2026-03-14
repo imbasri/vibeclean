@@ -9,7 +9,7 @@ export default defineConfig({
   out: "./drizzle/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: (process.env.DATABASE_URL_SSL || process.env.DATABASE_URL)!.replace("?sslmode=disable", "") + "?sslmode=no-verify",
+    url: (process.env.DATABASE_URL || "").replace("?sslmode=disable", "").replace("?sslmode=no-verify", "") + "?sslmode=disable",
   },
   verbose: true,
   strict: true,

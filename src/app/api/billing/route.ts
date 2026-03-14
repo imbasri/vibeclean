@@ -220,11 +220,13 @@ export async function GET(request: NextRequest) {
     // Get invoices from database
     const dbInvoices = await db
       .select({
-        id: subscriptionInvoices.invoiceNumber,
+        id: subscriptionInvoices.id,
+        invoiceNumber: subscriptionInvoices.invoiceNumber,
         date: subscriptionInvoices.createdAt,
         amount: subscriptionInvoices.amount,
         status: subscriptionInvoices.status,
         plan: subscriptionInvoices.plan,
+        paymentUrl: subscriptionInvoices.paymentUrl,
       })
       .from(subscriptionInvoices)
       .where(eq(subscriptionInvoices.organizationId, organizationId))
@@ -233,10 +235,12 @@ export async function GET(request: NextRequest) {
 
     const invoices = dbInvoices.map((inv) => ({
       id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
       date: inv.date.toISOString(),
       amount: Number(inv.amount),
       status: inv.status as "paid" | "pending" | "failed",
       plan: inv.plan || plan,
+      paymentUrl: inv.paymentUrl,
     }));
 
     // Use subscription data if available, otherwise use organization defaults

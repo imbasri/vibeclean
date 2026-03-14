@@ -115,15 +115,30 @@ export function useOrders(options: UseOrdersOptions = {}): UseOrdersReturn {
 
   const createOrder = useCallback(async (data: CreateOrderData): Promise<Order | null> => {
     try {
+      console.log("[useOrders] Creating order with data:", JSON.stringify(data).substring(0, 500));
+      
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
+      console.log("[useOrders] Response status:", response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create order");
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const text = await response.text();
+          console.log("[useOrders] Error response text:", text);
+          if (text) {
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.error || errorData.details || errorMessage;
+            console.error("[useOrders] Parsed error:", errorData);
+          }
+        } catch (e) {
+          console.error("[useOrders] Failed to parse error response");
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();

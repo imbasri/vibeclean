@@ -93,10 +93,10 @@ const itemVariants: Variants = {
 
 // Helper function to get loyalty tier
 function getLoyaltyTier(points: number): { tier: string; color: string } {
-  if (points >= 2000) return { tier: "VIP", color: "bg-amber-100 text-amber-700" };
-  if (points >= 1000) return { tier: "Gold", color: "bg-yellow-100 text-yellow-700" };
+  if (points >= 2000) return { tier: "VIP", color: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" };
+  if (points >= 1000) return { tier: "Gold", color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" };
   if (points >= 500) return { tier: "Silver", color: "bg-muted text-muted-foreground" };
-  return { tier: "Bronze", color: "bg-orange-100 text-orange-700" };
+  return { tier: "Bronze", color: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" };
 }
 
 export default function CustomersPage() {
@@ -311,18 +311,20 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold text-foreground">Pelanggan</h1>
           <p className="text-muted-foreground mt-1">Kelola data pelanggan dan loyalty program</p>
         </div>
-        <PermissionGuard allowedRoles={["owner", "manager"]}>
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-        </PermissionGuard>
-        <PermissionGuard allowedRoles={["owner", "manager", "cashier"]}>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Tambah Pelanggan
-          </Button>
-        </PermissionGuard>
+        <div className="flex items-center gap-2">
+          <PermissionGuard allowedRoles={["owner", "manager"]}>
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </PermissionGuard>
+          <PermissionGuard allowedRoles={["owner", "manager", "cashier"]}>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Tambah Pelanggan
+            </Button>
+          </PermissionGuard>
+        </div>
       </motion.div>
 
       {/* Stats Cards */}
@@ -334,30 +336,14 @@ export default function CustomersPage() {
       >
         <motion.div variants={itemVariants}>
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="h-5 w-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg shrink-0">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "-" : totalCustomers}</p>
-                  <p className="text-sm text-muted-foreground">Total Pelanggan</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "-" : formatCurrency(totalRevenue)}</p>
-                  <p className="text-sm text-muted-foreground">Total Pendapatan</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg sm:text-2xl font-bold truncate">{isLoading ? "-" : totalCustomers}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">Total Pelanggan</p>
                 </div>
               </div>
             </CardContent>
@@ -366,14 +352,14 @@ export default function CustomersPage() {
 
         <motion.div variants={itemVariants}>
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <ShoppingBag className="h-5 w-5 text-purple-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-50 dark:bg-green-900/20 rounded-lg shrink-0">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "-" : formatCurrency(avgOrderValue)}</p>
-                  <p className="text-sm text-muted-foreground">Rata-rata Order</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm sm:text-2xl font-bold truncate">{isLoading ? "-" : formatCurrency(totalRevenue)}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">Total Pendapatan</p>
                 </div>
               </div>
             </CardContent>
@@ -382,14 +368,30 @@ export default function CustomersPage() {
 
         <motion.div variants={itemVariants}>
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <Star className="h-5 w-5 text-amber-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg shrink-0">
+                  <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{isLoading ? "-" : vipCustomers}</p>
-                  <p className="text-sm text-muted-foreground">Pelanggan VIP</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm sm:text-2xl font-bold truncate">{isLoading ? "-" : formatCurrency(avgOrderValue)}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">Rata-rata Order</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg shrink-0">
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg sm:text-2xl font-bold truncate">{isLoading ? "-" : vipCustomers}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">Pelanggan VIP</p>
                 </div>
               </div>
             </CardContent>

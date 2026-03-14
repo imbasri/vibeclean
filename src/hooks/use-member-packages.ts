@@ -155,6 +155,8 @@ interface UseMemberSubscriptionsReturn {
   refetch: () => Promise<void>;
   createSubscription: (data: any) => Promise<MemberSubscription | null>;
   updateSubscription: (id: string, data: any) => Promise<boolean>;
+  cancelSubscription: (id: string) => Promise<void>;
+  renewSubscription: (id: string) => Promise<void>;
 }
 
 export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsReturn {
@@ -201,6 +203,24 @@ export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsR
     }
   };
 
+  const cancelSubscription = async (id: string) => {
+    const response = await fetch(`/api/member-packages/subscriptions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+    if (!response.ok) throw new Error("Failed to cancel subscription");
+    await fetchSubscriptions();
+  };
+
+  const renewSubscription = async (id: string) => {
+    const response = await fetch(`/api/member-packages/subscriptions/${id}/renew`, {
+      method: "POST",
+    });
+    if (!response.ok) throw new Error("Failed to renew subscription");
+    await fetchSubscriptions();
+  };
+
   return {
     subscriptions,
     isLoading,
@@ -208,6 +228,8 @@ export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsR
     refetch: fetchSubscriptions,
     createSubscription,
     updateSubscription: async () => false,
+    cancelSubscription,
+    renewSubscription,
   };
 }
 

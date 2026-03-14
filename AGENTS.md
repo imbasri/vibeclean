@@ -1,61 +1,51 @@
-Baik, saya mengerti. Kamu ingin **PRD yang berfokus pada Model Bisnis SaaS (Software as a Service)**—bagaimana aplikasi ini bekerja sebagai sebuah perusahaan, bagaimana kamu mendapatkan uang (monetisasi), dan bagaimana operasionalnya berjalan dari sisi kamu sebagai **Founder**.
+---
 
-Ini adalah **Business & Product Requirements Document (B-PRD)** untuk **VibeClean**:
+# **Business & Product Requirements Document (B-PRD): VibeClean SaaS**
+
+## **1. Arsitektur Platform (Multi-Tenancy)**
+
+Platform ini dibangun dengan model **Multi-tenant**, di mana Anda sebagai Founder adalah "Tuan Tanah" yang bisa mengatur semua "Penyewa" (Owner Laundry).
+
+* **Founder/Super Admin Dashboard**: Tempat Anda memantau seluruh transaksi, mengaktifkan/menonaktifkan fitur untuk user tertentu, dan mengatur biaya admin (Platform Fee).
+* **Merchant/Owner Dashboard**: Tempat pengusaha laundry mengelola cabang, karyawan, dan melihat laporan keuangan mereka sendiri.
+* **Customer Tracking Page**: Halaman ringan (lightweight) untuk pelanggan laundry memantau status cucian mereka melalui WhatsApp.
 
 ---
 
-# **Business-PRD: VibeClean SaaS Platform**
+## **2. Model Bisnis & Kontrol Founder**
 
-## **1. Model Bisnis (The Core Business)**
+Founder memiliki kendali penuh untuk melakukan "Override" atau pengaturan khusus sesuai kebutuhan user.
 
-VibeClean adalah platform **B2B (Business-to-Business)**. Kamu menyediakan infrastruktur teknologi bagi pemilik laundry agar mereka bisa menjalankan bisnisnya secara digital tanpa harus membangun aplikasi sendiri.
-
-### **A. Strategi Monetisasi (Revenue Streams)**
-
-Sebagai Founder, kamu mendapatkan uang dari tiga pintu:
-
-1. **Subscription Fee (Langganan):** Biaya bulanan dari Owner Laundry untuk akses fitur Pro/Enterprise.
-2. **Transaction Fee (Biaya Admin):** Kamu mengambil margin kecil (misal: Rp 500 - Rp 1.000) dari setiap transaksi yang menggunakan pembayaran digital Mayar.
-3. **Add-on Services:** Penjualan kuota WhatsApp Notifikasi atau fitur Custom Domain.
-
----
-
-## **2. Value Proposition (Nilai Jual)**
-
-* **Ke Pemilik Laundry:** "Kelola 10 cabang semudah kelola 1 cabang. Pantau uang masuk secara real-time dari HP."
-* **Ke Kasir:** "Input order cepat, gak perlu hitung manual, gak perlu takut salah hitung diskon."
-* **Ke Pelanggan:** "Terima nota digital via WhatsApp dan bisa pantau status cucian kapan saja."
-
----
-
-## **3. Spesifikasi Paket & Fitur (Packaging)**
-
-| Fitur | **Starter (Gratis)** | **Pro (Berbayar)** | **Enterprise (SaaS Premium)** |
+| Fitur | Starter (Gratis) | Pro (Monthly) | Enterprise (SaaS Premium) |
 | --- | --- | --- | --- |
-| **Harga** | Rp 0 / bulan | Rp 149.000 / bulan | Custom / Coming Soon |
-| **Cabang** | Maksimal 1 Cabang | Multi-branch (Hingga 5) | Unlimited |
-| **Transaksi** | Maksimal 100/bln | Unlimited | Unlimited |
-| **Pembayaran** | QRIS & VA Mayar | QRIS, VA, Credit Card | Dedicated Payment Gateway |
-| **Marketing** | - | Kupon & Paket Member | Custom Domain + Email |
-| **Support** | Email | WhatsApp Group | Dedicated Manager |
+| **Harga** | Rp 0 | Rp 149.000 / bln | Custom (By Founder) |
+| **Limit cabang** | 1 cabang | Up to 5 cabang | Unlimited |
+| **Platform Fee** | Tinggi (default: Rp 2.000) | Rendah (default: Rp 500) | Negotiable |
+| **Akses Founder** | Support standar | Prioritas | Full customization |
 
 ---
 
-## 3A. Add-on Products
+## **3. Sistem Add-ons & Upselling**
 
-| Add-on | Harga | Durasi |
-|--------|-------|--------|
-| Custom Domain | Rp 299.000 | 1 tahun |
-| WhatsApp 100 Pesan | Rp 25.000 | 30 hari |
-| WhatsApp 500 Pesan | Rp 100.000 | 30 hari |
-| WhatsApp 1000 Pesan | Rp 175.000 | 30 hari |
+Sesuai keinginan Anda agar Founder bisa setting kebutuhan user, berikut adalah sistem Add-on yang bisa diaktivasi:
+
+1. **WhatsApp Notification Pack**:
+   * Sistem kuota (Credit-based).
+   * Founder bisa menambah Kuota secara manual jika user membayar di luar sistem (manual transfer).
+
+2. **Custom Domain (White-label)**:
+   * User menggunakan domain sendiri (misal: `order.laundryku.com`).
+   * Founder melakukan approval dan konfigurasi DNS di sisi backend.
+
+3. **Revenue Sharing Adjustment**:
+   * Founder bisa mengatur persentase potongan transaksi khusus untuk merchant besar agar mereka tetap loyal.
 
 ---
 
-## 4. Technical Stack
+## **4. Technical Stack**
 
 | Layer | Technology |
-|-------|------------|
+| --- | --- |
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript |
 | Database | PostgreSQL |
@@ -68,7 +58,7 @@ Sebagai Founder, kamu mendapatkan uang dari tiga pintu:
 
 ---
 
-## 5. Implementation Notes
+## **5. Implementation Notes**
 
 Setiap perubahan signifikan didokumentasikan di folder `implementation/`.
 
@@ -76,7 +66,7 @@ Contoh: lihat `implementation/2026-03-11-uploadthing/README.md`
 
 ---
 
-## 6. Proses Bisnis & Alur Kerja (Workflow)
+## **6. Proses Bisnis & Alur Kerja (Workflow)**
 
 ### **A. Onboarding (Pendaftaran Klien)**
 
@@ -101,18 +91,17 @@ Contoh: lihat `implementation/2026-03-11-uploadthing/README.md`
 
 ---
 
-## 7. Strategi Pemasaran (GTM Strategy)
+## **7. Strategi Pemasaran (GTM Strategy)**
 
 * **Target Market:** Pemilik laundry kiloan di area perkotaan, laundry sepatu, dan katering laundry ruko.
-* **Channel:** * **Instagram/TikTok:** Konten "Life as a Laundry Owner" menggunakan VibeClean.
-* **Affiliate:** Memberikan komisi kepada pemilik laundry yang mengajak temannya pakai VibeClean (Cocok dengan minatmu di bidang *affiliate*).
-* **Direct Sales:** Menghubungi laundry-laundry di Google Maps.
-
-
+* **Channel:**
+  * **Instagram/TikTok:** Konten "Life as a Laundry Owner" menggunakan VibeClean.
+  * **Affiliate:** Memberikan komisi kepada pemilik laundry yang mengajak temannya pakai VibeClean (Cocok dengan minatmu di bidang *affiliate*).
+  * **Direct Sales:** Menghubungi laundry-laundry di Google Maps.
 
 ---
 
-## 8. Operasional Founder (Behind the Scene)
+## **8. Operasional Founder (Behind the Scene)**
 
 Sebagai Founder, tugas harianmu adalah:
 
@@ -122,20 +111,173 @@ Sebagai Founder, tugas harianmu adalah:
 
 ---
 
-## 9. Roadmap Masa Depan
+## **9. Roadmap Masa Depan**
 
 * **VibeClean Supply:** Marketplace khusus deterjen dan plastik laundry (Cuan tambahan dari *dropship/affiliate* bahan baku).
 * **AI Laundry Assistant:** AI yang bisa memprediksi kapan stok deterjen habis berdasarkan jumlah cucian.
 
 ---
 
-### **Apa yang bisa kita kerjakan sekarang?**
+## **10. Implementation Status**
 
-PRD Bisnis ini sudah lengkap. Kamu sudah punya gambaran bagaimana cara aplikasi ini mencetak uang.
+### ✅ Completed Features
 
-**Would you like me to...**
+| Feature | Location | Status |
+| --- | --- | --- |
+| Founder Login | `/founder/login` | ✅ Done |
+| Founder Dashboard Overview | `/founder/dashboard` | ✅ Done |
+| Revenue Charts | `/founder/dashboard` | ✅ Done (Recharts) |
+| Organizations Management | `/founder/dashboard/organizations` | ✅ Done |
+| Revenue Analytics | `/founder/dashboard/revenue` | ✅ Done |
+| Subscriptions Management | `/founder/dashboard/subscriptions` | ✅ Done |
+| Transaction Fee Stats | `/founder/dashboard/transaction-fee` | ✅ Done |
+| Withdrawals Approval | `/founder/dashboard/withdrawals` | ✅ Done |
+| Add-ons Management | `/founder/dashboard/addons` | ✅ Done |
+| Revenue Sharing Settings | `/founder/dashboard/revenue-sharing` | ✅ Done |
+| Platform Settings | `/founder/settings` | ✅ Done |
+| Per-Tenant Subscription Override | `/api/admin/activate-subscription` | ✅ Done |
+| Tax Settings (Schema + API) | `/api/settings/tax` | ✅ Done |
+| Custom Domain Verification | `/dashboard/addons` | ✅ Done |
+| Advanced Tax Reports | `/dashboard/reports/tax` | ✅ Done (PDF Export, Quarterly, Tax Settings Integration) |
 
-1. **Buatkan Mockup Landing Page (Copywriting)** yang fokus menjual paket Pro ini?
-2. **Buatkan Logic Webhook** agar saat Owner bayar langganan Pro, fiturnya otomatis aktif di dashboard mereka?
+### 🆕 Newly Implemented (Latest Session)
 
-**Pilih salah satu, dan kita buatkan sekarang!**
+| Feature | Location | Status |
+| --- | --- | --- |
+| Revenue Chart with Period Selector | `/founder/dashboard` | ✅ Done |
+| Enhanced Stats Cards (GMV, Transaction Fees) | `/founder/dashboard` | ✅ Done |
+| Tax Settings Schema | `src/lib/db/schema.ts` | ✅ Done |
+| Tax Settings API | `/api/settings/tax` | ✅ Done |
+| Revenue Sharing Settings Schema | `src/lib/db/schema.ts` | ✅ Done |
+| Revenue Sharing API | `/api/founder/revenue-sharing` | ✅ Done |
+| Revenue Sharing Page UI | `/founder/dashboard/revenue-sharing` | ✅ Done |
+| Advanced Tax Reports | `/dashboard/reports/tax` | ✅ Done (PDF Export, Quarterly, Branch Filter, Tax Settings Integration) |
+| Employee Direct Add | `/api/staff` + UI | ✅ Done |
+| Settings Page UI/UX | `/dashboard/settings` | ✅ Done |
+| Member Packages POS Integration | `/dashboard/pos` | ✅ Done |
+| QR Code Custom Colors | `/api/branches/[id]/qrcode` + branches UI | ✅ Done |
+| QR Code at POS | PaymentQRISDialog | ✅ Done |
+| Billing Page Suspense Fix | `/dashboard/billing` | ✅ Done (Fixed useSearchParams error) |
+| Branch Settings Fix | `/dashboard/branches` | ✅ Done (Fixed button & QR colors) |
+| Payment Flow (Create Order) | `/api/payments/public/create` | ✅ Done |
+| Balance Tracking Schema | `organization_balances`, `balance_transactions` | ✅ Done |
+| Webhook Balance Update | `/api/webhooks/mayar` | ✅ Done (Update owner balance on payment) |
+| Balance API | `/api/balance` | ✅ Done |
+| Withdrawal API | `/api/balance/withdraw` | ✅ Done |
+| Balance Page UI | `/dashboard/balance` | ✅ Done |
+| Zustand State Management | `src/stores/` | ✅ Done |
+| Zustand Migration (POS, Orders, Layout) | POS, Orders, Dashboard Layout | ✅ Done |
+| Shadcn/UI Style Update | Components + Best Practices | ✅ Done |
+| New StatusBadge Component | Reusable status badges | ✅ Done |
+| New Components | Accordion, AlertDialog, Collapsible, ToggleGroup | ✅ Done |
+
+### 📁 Implementation Docs
+
+- `implementation/2026-03-11-uploadthing/README.md`
+- `implementation/2026-03-12-founder-dashboard-enhancement/README.md`
+- `implementation/2026-03-12-move-admin-to-founder/README.md`
+- `implementation/2026-03-12-addons-management/README.md`
+- `implementation/2026-03-12-platform-settings/README.md`
+- `implementation/2026-03-12-revenue-sharing/README.md`
+- `implementation/2026-03-13-member-packages-pos-integration/README.md`
+- `implementation/2026-03-13-balance-payment-system/README.md`
+- `implementation/2026-03-14-zustand-state-management/README.md`
+- `implementation/2026-03-14-shadcn-style-update/README.md`
+
+---
+
+## **11. Database Schema (Complete)**
+
+### Core Tables
+
+```typescript
+// Organizations (Tenants)
+organizations: pgTable({
+  id: uuid().defaultRandom().primaryKey(),
+  name: text().notNull(),
+  slug: text().unique(),
+  plan: subscriptionPlanEnum().default("starter"),
+  subscriptionStatus: subscriptionStatusEnum().default("trial"),
+  ownerId: uuid().references(() => users.id),
+})
+
+// Orders
+orders: pgTable({
+  id: uuid().defaultRandom().primaryKey(),
+  orderNumber: text().unique(),
+  branchId: uuid().references(() => branches.id),
+  customerId: uuid().references(() => customers.id),
+  subtotal: decimal(),
+  discount: decimal(),
+  total: decimal(),
+  status: orderStatusEnum().default("pending"),
+  paymentStatus: paymentStatusEnum().default("unpaid"),
+  transactionFee: decimal(), // Founder's revenue per transaction
+  // ... more fields
+})
+
+// Subscriptions (Billing)
+subscriptions: pgTable({
+  organizationId: uuid().unique(),
+  plan: subscriptionPlanEnum(),
+  status: subscriptionStatusEnum(),
+  mayarSubscriptionId: text(),
+  // ... more fields
+})
+
+// Withdrawals (Settlement)
+withdrawals: pgTable({
+  organizationId: uuid(),
+  amount: decimal(),
+  fee: decimal(),
+  netAmount: decimal(),
+  status: withdrawalStatusEnum(),
+  bankName: text(),
+  bankAccountNumber: text(),
+  // ... more fields
+})
+
+// Tax Settings (NEW)
+taxSettings: pgTable({
+  organizationId: uuid().unique(),
+  taxName: text().default("PPN"),
+  taxType: taxTypeEnum(),
+  taxRate: decimal(),
+  isActive: boolean(),
+})
+
+// Revenue Sharing (NEW)
+revenueSharingSettings: pgTable({
+  organizationId: uuid().unique(),
+  customFeeType: text(),
+  customFeeValue: decimal(),
+  founderDiscountPercent: decimal(),
+})
+```
+
+---
+
+## **12. Quick Start**
+
+```bash
+# Install dependencies
+npm install
+
+# Run development
+npm run dev
+
+# Push schema changes to database
+npm run db:push
+```
+
+---
+
+### **Apa yang ingin Anda lakukan selanjutnya?**
+
+1. **Affiliate System** - Sistem komisi untuk owner yang mengajak teman
+2. **Advanced Tax Reports** - Laporan pajak lengkap dengan export PDF
+3. **Customer Loyalty Program** - Points & rewards enhancement
+4. **SMS/WhatsApp Bulk Notifications** - Kirim broadcast ke pelanggan
+5. **Advanced Analytics** - Charts dan insights untuk owner
+
+**Pilih salah satu, dan saya akan kerjakan dengan standar Senior Developer!**

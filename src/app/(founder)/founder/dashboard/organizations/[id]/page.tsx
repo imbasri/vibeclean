@@ -20,7 +20,6 @@ import {
   AlertCircle,
   Receipt,
   Store,
-  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -177,15 +176,15 @@ function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-function StatCard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  description 
-}: { 
-  title: string; 
-  value: string | number; 
-  icon: React.ElementType; 
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  description
+}: {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
   description?: string;
 }) {
   return (
@@ -283,7 +282,7 @@ export default function OrganizationDetailPage({
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Link 
+            <Link
               href="/admin"
               className="inline-flex items-center justify-center h-8 gap-1.5 px-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/80 transition-colors"
             >
@@ -344,7 +343,7 @@ export default function OrganizationDetailPage({
                   </div>
                 )}
               </div>
-              
+
               {/* Info */}
               <div className="flex-1 space-y-4">
                 <div>
@@ -355,7 +354,7 @@ export default function OrganizationDetailPage({
                   </div>
                   <p className="text-muted-foreground">@{organization.slug}</p>
                 </div>
-                
+
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-muted-foreground" />

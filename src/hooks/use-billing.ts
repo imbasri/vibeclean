@@ -25,10 +25,12 @@ export interface BillingSubscription {
 
 export interface BillingInvoice {
   id: string;
+  invoiceNumber?: string;
   date: string;
   amount: number;
   status: "paid" | "pending" | "failed";
   plan: string;
+  paymentUrl?: string;
 }
 
 export interface BillingData {

@@ -241,24 +241,50 @@ export async function PATCH(
       paidAmount: parseFloat(updatedOrder.paidAmount),
     };
 
-    // Send email notification for status changes
+    // Send WhatsApp notification for status changes
     if (body.status && body.status !== existingOrder.status) {
-      const statusEmailTemplates: Record<string, string> = {
-        ready: "orderReady",
-        completed: "orderCompleted",
+      const statusMessages: Record<string, { title: string; message: string }> = {
+        processing: {
+          title: "Order Diproses",
+          message: `Halo ${existingOrder.customerName}, pesanan Anda dengan nomor ${existingOrder.orderNumber} sedang Diproses. Terima kasih!`,
+        },
+        washing: {
+          title: "Sedang Dicuci",
+          message: `Halo ${existingOrder.customerName}, pesanan ${existingOrder.orderNumber} sedang dalam tahap Pencucian. Mohon ditunggu ya!`,
+        },
+        drying: {
+          title: "Sedang Dikeringkan",
+          message: `Halo ${existingOrder.customerName}, pesanan ${existingOrder.orderNumber} sedang dalam tahap Pengeringan.`,
+        },
+        ironing: {
+          title: "Sedang Disetrika",
+          message: `Halo ${existingOrder.customerName}, pesanan ${existingOrder.orderNumber} sedang dalam tahap Penyetrikaan. Hampir selesai!`,
+        },
+        ready: {
+          title: "Siap Ambil",
+          message: `Halo ${existingOrder.customerName}, good news! Pesanan ${existingOrder.orderNumber} sudah SIAP DIAMBIL! Silakan datang ke outlet kami.`,
+        },
+        delivered: {
+          title: "Diantar",
+          message: `Halo ${existingOrder.customerName}, pesanan ${existingOrder.orderNumber} sedang dalam perjalanan menuju alamat Anda!`,
+        },
+        completed: {
+          title: "Selesai",
+          message: `Halo ${existingOrder.customerName}, pesanan ${existingOrder.orderNumber} telah selesai. Terima kasih telah mempercayakan laundry Anda kepada kami!`,
+        },
       };
 
-      const templateName = statusEmailTemplates[body.status];
-      if (templateName) {
-        sendTemplatedEmail(
-          existingOrder.customerPhone + "@s.whatsapp.net", // In production, get real email
-          templateName,
-          {
-            orderNumber: existingOrder.orderNumber,
-            customerName: existingOrder.customerName,
-          }
-        ).catch((err) => {
-          console.error("Failed to send status email:", err);
+      const statusInfo = statusMessages[body.status];
+      if (statusInfo && existingOrder.customerPhone) {
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/notifications/whatsapp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: existingOrder.customerPhone,
+            message: statusInfo.message,
+          }),
+        }).catch((err) => {
+          console.error("Failed to send WhatsApp notification:", err);
         });
       }
     }
@@ -306,10 +332,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Order tidak ditemukan" }, { status: 404 });
     }
 
-    // Only allow cancellation of pending orders
-    if (existingOrder.status !== "pending") {
+    // Only allow cancellation of pending, processing orders
+    if (!["pending", "processing"].includes(existingOrder.status)) {
       return NextResponse.json(
-        { error: "Hanya order dengan status pending yang dapat dibatalkan" },
+        { error: "Order dengan status pending atau processing dapat dibatalkan" },
         { status: 400 }
       );
     }

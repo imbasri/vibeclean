@@ -12,6 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import {
   Package,
@@ -100,6 +107,8 @@ export function OrderDetailDialog({
   onUpdate,
 }: OrderDetailDialogProps) {
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [newStatus, setNewStatus] = useState<OrderStatus | "">("");
 
   if (!order) return null;
 
@@ -171,6 +180,143 @@ export function OrderDetailDialog({
     }
   };
 
+  const handleUpdateStatus = async () => {
+    if (!order || !newStatus || newStatus === order.status) return;
+    
+    try {
+      setIsUpdatingStatus(true);
+      const response = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Gagal mengupdate status");
+      }
+
+      gooeyToast.success(`Status order diperbarui menjadi ${statusConfig[newStatus].label}!`);
+      
+      // If status changed to delivered, send WhatsApp notification
+      if (newStatus === "delivered") {
+        try {
+          await fetch("/api/notifications/whatsapp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              phone: order.customerPhone,
+              type: "delivery",
+              orderNumber: order.orderNumber,
+              customerName: order.customerName,
+            }),
+          });
+          gooeyToast.success("Notifikasi WhatsApp dikirim ke customer!");
+        } catch (err) {
+          console.error("WhatsApp notification error:", err);
+        }
+      }
+      
+      if (onUpdate) {
+        onUpdate();
+      }
+      
+      onOpenChange(false);
+      setNewStatus("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal mengupdate status";
+      gooeyToast.error(message);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleRegeneratePayment = async () => {
+    if (!order) return;
+    
+    try {
+      setIsUpdatingStatus(true);
+      const response = await fetch("/api/payments/public/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: order.branchId,
+          orderId: order.id,
+          amount: Number(order.total),
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Gagal membuat pembayaran");
+      }
+
+      const data = await response.json();
+      
+      // Show success and keep dialog open to show payment info
+      gooeyToast.success("QRIS berhasil digenerate!");
+      
+      // If we have QR code URL, show it in a new window or alert
+      if (data.qrCodeUrl) {
+        // Open payment URL in new tab
+        window.open(data.paymentUrl, '_blank');
+      } else if (data.paymentUrl) {
+        // Fallback to payment URL
+        window.open(data.paymentUrl, '_blank');
+      }
+      
+      // Refresh the order data
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal membuat pembayaran";
+      gooeyToast.error(message);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!order || !confirm("Yakin ingin membatalkan order ini?")) return;
+    
+    try {
+      setIsUpdatingStatus(true);
+      const response = await fetch(`/api/orders/${order.id}/cancel`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Gagal membatalkan order");
+      }
+
+      gooeyToast.success("Order berhasil dibatalkan!");
+      
+      if (onUpdate) {
+        onUpdate();
+      }
+      
+      onOpenChange(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal membatalkan order";
+      gooeyToast.error(message);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Get available next statuses (exclude current and cancelled/completed)
+  const availableStatuses: OrderStatus[] = order.status === "cancelled" || order.status === "completed"
+    ? []
+    : (["pending", "processing", "washing", "drying", "ironing", "ready", "delivered", "completed"] as OrderStatus[]).filter(
+        (s) => s !== order.status
+      );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -190,6 +336,80 @@ export function OrderDetailDialog({
             <StatusBadge status={order.status} />
             <PaymentBadge status={order.paymentStatus} />
           </div>
+
+          {/* Regenerate Payment Button - Only show for unpaid orders */}
+          {order.paymentStatus === "unpaid" && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20 p-4">
+              <h4 className="text-sm font-medium text-orange-700 dark:text-orange-400 mb-3">Pembelian Belum Lunas</h4>
+              <Button
+                variant="outline"
+                onClick={handleRegeneratePayment}
+                disabled={isUpdatingStatus}
+                className="w-full border-orange-300 text-orange-700 hover:bg-orange-100"
+              >
+                {isUpdatingStatus ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <QrCode className="w-4 h-4 mr-2" />
+                )}
+                Generate QRIS Baru
+              </Button>
+            </div>
+          )}
+
+          {/* Status Update */}
+          {availableStatuses.length > 0 && (
+            <div className="rounded-lg border p-4 space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground">Update Status</h4>
+              <div className="flex gap-2">
+                <Select
+                  value={newStatus}
+                  onValueChange={(value) => setNewStatus(value as OrderStatus)}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Pilih status baru" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableStatuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {statusConfig[status].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={handleUpdateStatus}
+                  disabled={!newStatus || isUpdatingStatus}
+                >
+                  {isUpdatingStatus ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Update"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancel Order Button */}
+          {order.status === "pending" || order.status === "processing" ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20 p-4">
+              <h4 className="text-sm font-medium text-red-700 dark:text-red-400 mb-3">Batalkan Order</h4>
+              <Button
+                variant="destructive"
+                onClick={handleCancelOrder}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                {isUpdatingStatus ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <XCircle className="w-4 h-4 mr-2" />
+                )}
+                Batalkan Order
+              </Button>
+            </div>
+          ) : null}
 
           {/* Customer Info */}
           <div className="rounded-lg border p-4 space-y-2">
@@ -227,8 +447,16 @@ export function OrderDetailDialog({
                 </div>
                 {order.discount && order.discount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Diskon</span>
-                    <span>-{formatCurrency(order.discount)}</span>
+                    <span>
+                      Diskon {order.discountType === "percentage" && order.discount <= 100 ? `(${order.discount}%)` : ""}
+                    </span>
+                    <span>
+                      -{formatCurrency(
+                        order.discountType === "percentage" && order.discount <= 100
+                          ? (order.subtotal * order.discount) / 100
+                          : order.discount
+                      )}
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold">

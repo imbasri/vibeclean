@@ -124,6 +124,63 @@ export const organizations = pgTable(
 );
 
 // ============================================
+// ORGANIZATION BALANCES (Owner Earnings Tracking)
+// ============================================
+
+export const organizationBalances = pgTable(
+  "organization_balances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .unique(),
+    totalEarnings: decimal("total_earnings", { precision: 15, scale: 2 }).notNull().default("0"), // Total gross earnings
+    availableBalance: decimal("available_balance", { precision: 15, scale: 2 }).notNull().default("0"), // Available for withdrawal
+    pendingBalance: decimal("pending_balance", { precision: 15, scale: 2 }).notNull().default("0"), // Pending (unpaid orders)
+    totalWithdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).notNull().default("0"), // Total withdrawn
+    lastTransactionAt: timestamp("last_transaction_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("balances_organization_id_idx").on(table.organizationId),
+  ]
+);
+
+// ============================================
+// BALANCE TRANSACTIONS (Earnings/Withdrawal History)
+// ============================================
+
+// Using text instead of enum to avoid migration issues
+
+export const balanceTransactions = pgTable(
+  "balance_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    type: text("type").notNull(), // "payment_received", "fee_deducted", "withdrawal", "refund", "adjustment"
+    status: text("status").notNull().default("pending"), // "pending", "completed", "failed", "cancelled"
+    amount: decimal("amount", { precision: 15, scale: 2 }).notNull(), // Gross amount
+    feeAmount: decimal("fee_amount", { precision: 15, scale: 2 }).notNull().default("0"), // Transaction fee (founder's cut)
+    netAmount: decimal("net_amount", { precision: 15, scale: 2 }).notNull(), // Net amount (after fee)
+    description: text("description"),
+    referenceId: text("reference_id"), // Mayar transaction ID or withdrawal ID
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("balance_trans_org_idx").on(table.organizationId),
+    index("balance_trans_order_idx").on(table.orderId),
+    index("balance_trans_type_idx").on(table.type),
+    index("balance_trans_status_idx").on(table.status),
+  ]
+);
+
+// ============================================
 // USERS (Better Auth compatible)
 // ============================================
 
@@ -229,6 +286,10 @@ export const branches = pgTable(
     address: text("address").notNull(),
     phone: text("phone").notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    // QR Code customization settings
+    qrLogoUrl: text("qr_logo_url"),
+    qrColorDark: text("qr_color_dark").default("#000000"),
+    qrColorLight: text("qr_color_light").default("#FFFFFF"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -515,6 +576,8 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   invitations: many(staffInvitations),
   subscription: one(subscriptions),
   subscriptionInvoices: many(subscriptionInvoices),
+  balance: one(organizationBalances),
+  balanceTransactions: many(balanceTransactions),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -610,6 +673,28 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   }),
   items: many(orderItems),
   statusHistory: many(orderStatusHistory),
+}));
+
+// ============================================
+// BALANCE RELATIONS
+// ============================================
+
+export const organizationBalancesRelations = relations(organizationBalances, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [organizationBalances.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const balanceTransactionsRelations = relations(balanceTransactions, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [balanceTransactions.organizationId],
+    references: [organizations.id],
+  }),
+  order: one(orders, {
+    fields: [balanceTransactions.orderId],
+    references: [orders.id],
+  }),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -763,18 +848,6 @@ export const subscriptionInvoicesRelations = relations(subscriptionInvoices, ({ 
 }));
 
 // ============================================
-// WITHDRAWAL STATUS ENUM
-// ============================================
-
-const withdrawalStatusEnum = pgEnum("withdrawal_status", [
-  "pending",
-  "processing",
-  "completed",
-  "rejected",
-  "cancelled",
-]);
-
-// ============================================
 // WITHDRAWALS (Settlement Requests)
 // ============================================
 
@@ -788,7 +861,7 @@ export const withdrawals = pgTable(
     amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
     fee: decimal("fee", { precision: 15, scale: 2 }).notNull().default("0"),
     netAmount: decimal("net_amount", { precision: 15, scale: 2 }).notNull(),
-    status: withdrawalStatusEnum("status").notNull().default("pending"),
+    status: text("status").notNull().default("pending"), // "pending", "processing", "completed", "rejected", "cancelled"
     // Bank details
     bankName: text("bank_name").notNull(),
     bankAccountNumber: text("bank_account_number").notNull(),
@@ -824,19 +897,8 @@ export const withdrawalsRelations = relations(withdrawals, ({ one }) => ({
 }));
 
 // ============================================
-// COUPON TYPE ENUM
+// COUPON TYPE (using text instead of enum to avoid migration issues)
 // ============================================
-
-const couponTypeEnum = pgEnum("coupon_type", [
-  "percentage",  // Percentage discount
-  "fixed",       // Fixed amount discount
-]);
-
-const couponScopeEnum = pgEnum("coupon_scope", [
-  "all",         // All services
-  "category",    // Specific category
-  "service",     // Specific service
-]);
 
 // ============================================
 // COUPONS
@@ -851,9 +913,9 @@ export const coupons = pgTable(
       .references(() => organizations.id, { onDelete: "cascade" }),
     code: text("code").notNull(),
     description: text("description"),
-    type: couponTypeEnum("type").notNull(),
+    type: text("type").notNull().default("percentage"), // "percentage" or "fixed"
     value: decimal("value", { precision: 10, scale: 2 }).notNull(), // Percentage or fixed amount
-    scope: couponScopeEnum("scope").notNull().default("all"),
+    scope: text("scope").notNull().default("all"), // "all", "category", "service"
     // Scope specific (for category or service specific)
     category: text("category"), // Service category
     serviceId: uuid("service_id"), // Specific service ID
@@ -906,13 +968,6 @@ export const couponUsages = pgTable(
 // MEMBERSHIP TIERS
 // ============================================
 
-const membershipTierEnum = pgEnum("membership_tier", [
-  "bronze",
-  "silver",
-  "gold",
-  "platinum",
-]);
-
 export const membershipTiers = pgTable(
   "membership_tiers",
   {
@@ -921,7 +976,7 @@ export const membershipTiers = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
     name: text("name").notNull(), // Bronze, Silver, Gold, Platinum
-    tier: membershipTierEnum("tier").notNull().unique(),
+    tier: text("tier").notNull().unique(), // "bronze", "silver", "gold", "platinum"
     minSpending: decimal("min_spending", { precision: 15, scale: 2 }).notNull().default("0"),
     discountPercentage: decimal("discount_percentage", { precision: 5, scale: 2 }).notNull().default("0"),
     pointMultiplier: decimal("point_multiplier", { precision: 5, scale: 2 }).notNull().default("1"), // 1x, 2x, etc.
@@ -1013,11 +1068,6 @@ export const customerMembershipsRelations = relations(customerMemberships, ({ on
 // TRANSACTION FEE TYPE ENUM
 // ============================================
 
-const transactionFeeTypeEnum = pgEnum("transaction_fee_type", [
-  "fixed",       // Fixed amount per transaction
-  "percentage",  // Percentage of transaction amount
-]);
-
 // ============================================
 // PLATFORM TRANSACTION FEE SETTINGS
 // ============================================
@@ -1041,6 +1091,86 @@ export const platformSettings = pgTable(
 // ============================================
 
 export const platformSettingsRelations = relations(platformSettings, ({ one }) => ({}));
+
+// ============================================
+// TAX SETTINGS (Organization-specific tax configuration)
+// ============================================
+
+export const taxSettings = pgTable(
+  "tax_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .unique(),
+    taxName: text("tax_name").notNull().default("PPN"), // e.g., "PPN", "PPh", etc.
+    taxType: text("tax_type").notNull().default("percentage"), // "percentage" or "fixed"
+    taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default("0"), // 10% = 10.00
+    isActive: boolean("is_active").notNull().default(true),
+    isDefault: boolean("is_default").notNull().default(false), // Use as default for new organizations
+    // Additional config
+    taxNumber: text("tax_number"), // NPWP or tax identification number
+    taxAddress: text("tax_address"), // Tax address for invoices
+    // Timestamps
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("tax_settings_organization_id_idx").on(table.organizationId),
+  ]
+);
+
+// ============================================
+// TAX SETTINGS RELATIONS
+// ============================================
+
+export const taxSettingsRelations = relations(taxSettings, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [taxSettings.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+// ============================================
+// REVENUE SHARING SETTINGS (Organization-specific transaction fee override)
+// ============================================
+
+export const revenueSharingSettings = pgTable(
+  "revenue_sharing_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .unique(),
+    // Override transaction fee for this organization
+    customFeeType: text("custom_fee_type"), // "percentage" | "fixed" | null (use default)
+    customFeeValue: decimal("custom_fee_value", { precision: 5, scale: 2 }), // Custom fee value
+    customFeeMin: integer("custom_fee_min"), // Minimum fee
+    customFeeMax: integer("custom_fee_max"), // Maximum fee
+    // Additional revenue sharing (e.g., founder gives discount to merchant)
+    founderDiscountPercent: decimal("founder_discount_percent", { precision: 5, scale: 2 }).default("0"),
+    // Reason/notes
+    reason: text("reason"),
+    // Timestamps
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("revenue_sharing_org_idx").on(table.organizationId),
+  ]
+);
+
+// ============================================
+// REVENUE SHARING RELATIONS
+// ============================================
+
+export const revenueSharingSettingsRelations = relations(revenueSharingSettings, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [revenueSharingSettings.organizationId],
+    references: [organizations.id],
+  }),
+}));
 
 // ============================================
 // ADD-ON TYPES

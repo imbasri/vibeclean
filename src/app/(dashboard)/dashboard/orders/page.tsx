@@ -246,7 +246,11 @@ export default function OrdersPage() {
       processing: orders.filter((o) => o.status === "processing" || o.status === "washing" || o.status === "drying" || o.status === "ironing").length,
       ready: orders.filter((o) => o.status === "ready").length,
       todayCount: todayOrders.length,
-      todayRevenue: todayOrders.reduce((sum, o) => sum + (o.paymentStatus === "paid" ? o.total : 0), 0),
+      todayRevenue: todayOrders.reduce((sum, o) => {
+        // Count revenue for paid orders (both digital payment and cash)
+        const isPaid = o.paymentStatus === "paid" || (o.paymentMethod === "cash" && o.paymentStatus !== "unpaid");
+        return sum + (isPaid ? Number(o.total) : 0);
+      }, 0),
     };
   }, [orders]);
 

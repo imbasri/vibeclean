@@ -57,7 +57,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStaff, type StaffMember } from "@/hooks/use-staff";
 import { useBranches } from "@/hooks/use-branches";
 import { formatDate } from "@/lib/utils";
-import { inviteStaffSchema, type InviteStaffInput } from "@/lib/validations/schemas";
+import { addStaffSchema, type AddStaffInput } from "@/lib/validations/schemas";
 import type { UserRole } from "@/types";
 
 // ============================================
@@ -75,13 +75,13 @@ const ROLE_LABELS: Record<UserRole, string> = {
 // INVITE STAFF DIALOG
 // ============================================
 
-interface InviteStaffDialogProps {
+interface AddStaffDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInvite: (data: InviteStaffInput) => Promise<void>;
+  onAdd: (data: AddStaffInput) => Promise<void>;
 }
 
-function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogProps) {
+function AddStaffDialog({ open, onOpenChange, onAdd }: AddStaffDialogProps) {
   const { branches, isLoading: branchesLoading } = useBranches();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [branchPermissionsState, setBranchPermissionsState] = useState<
@@ -94,10 +94,12 @@ function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogPr
     formState: { errors },
     setValue,
     reset,
-  } = useForm<InviteStaffInput>({
-    resolver: zodResolver(inviteStaffSchema),
+  } = useForm<AddStaffInput>({
+    resolver: zodResolver(addStaffSchema),
     defaultValues: {
+      name: "",
       email: "",
+      phone: "",
       branchPermissions: [],
     },
   });
@@ -105,7 +107,7 @@ function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogPr
   // Reset form when dialog opens
   React.useEffect(() => {
     if (open) {
-      reset({ email: "", branchPermissions: [] });
+      reset({ name: "", email: "", phone: "", branchPermissions: [] });
       setBranchPermissionsState({});
     }
   }, [open, reset]);
@@ -145,10 +147,10 @@ function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogPr
     return branchPermissionsState[branchId]?.includes(role) || false;
   };
 
-  const onSubmit = async (data: InviteStaffInput) => {
+  const onSubmit = async (data: AddStaffInput) => {
     setIsSubmitting(true);
     try {
-      await onInvite(data);
+      await onAdd(data);
       onOpenChange(false);
     } catch (err) {
       // Error handled by parent
@@ -165,21 +167,34 @@ function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogPr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="w-5 h-5" />
-            Undang Karyawan Baru
+            Tambah Karyawan Baru
           </DialogTitle>
           <DialogDescription>
-            Kirim undangan ke email karyawan dan atur peran mereka di setiap cabang
+            Tambahkan karyawan langsung dengan kata sandi default "vibeclean"
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-hidden flex flex-col gap-4">
+          {/* Name Input */}
+          <div className="space-y-2">
+            <Label htmlFor="staff-name">Nama Karyawan</Label>
+            <Input
+              id="staff-name"
+              placeholder="Budi Santoso"
+              {...register("name")}
+            />
+            {errors.name && (
+              <p className="text-sm text-red-500">{errors.name.message}</p>
+            )}
+          </div>
+
           {/* Email Input */}
           <div className="space-y-2">
-            <Label htmlFor="invite-email">Email Karyawan</Label>
+            <Label htmlFor="staff-email">Email Karyawan</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                id="invite-email"
+                id="staff-email"
                 type="email"
                 placeholder="karyawan@email.com"
                 {...register("email")}
@@ -189,6 +204,17 @@ function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogPr
             {errors.email && (
               <p className="text-sm text-red-500">{errors.email.message}</p>
             )}
+          </div>
+
+          {/* Phone Input */}
+          <div className="space-y-2">
+            <Label htmlFor="staff-phone">No. HP (Opsional)</Label>
+            <Input
+              id="staff-phone"
+              type="tel"
+              placeholder="0812 3456 7890"
+              {...register("phone")}
+            />
           </div>
 
           <Separator />
@@ -281,7 +307,205 @@ function InviteStaffDialog({ open, onOpenChange, onInvite }: InviteStaffDialogPr
           </Button>
           <Button disabled={isSubmitting} onClick={handleSubmit(onSubmit)}>
             {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Kirim Undangan
+            Tambah Karyawan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================
+// EDIT STAFF DIALOG
+// ============================================
+
+interface EditStaffDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  staff: StaffMember | null;
+  onSave: (memberId: string, branchPermissions: { branchId: string; roles: UserRole[] }[]) => Promise<void>;
+}
+
+function EditStaffDialog({ open, onOpenChange, staff, onSave }: EditStaffDialogProps) {
+  const { branches, isLoading: branchesLoading } = useBranches();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [branchPermissionsState, setBranchPermissionsState] = useState<
+    Record<string, UserRole[]>
+  >({});
+
+  // Initialize branch permissions when dialog opens
+  React.useEffect(() => {
+    if (open && staff) {
+      const initialPerms: Record<string, UserRole[]> = {};
+      staff.permissions.forEach((perm) => {
+        initialPerms[perm.branchId] = perm.roles;
+      });
+      setBranchPermissionsState(initialPerms);
+    }
+  }, [open, staff]);
+
+  const updateFormBranchPermissions = (newState: Record<string, UserRole[]>) => {
+    const permissionsArray = Object.entries(newState)
+      .filter(([_, roles]) => roles.length > 0)
+      .map(([branchId, roles]) => ({ branchId, roles }));
+    return permissionsArray;
+  };
+
+  const toggleRole = (branchId: string, role: UserRole) => {
+    setBranchPermissionsState((prev) => {
+      const currentRoles = prev[branchId] || [];
+      const hasRoleInBranch = currentRoles.includes(role);
+      let newState: Record<string, UserRole[]>;
+
+      if (hasRoleInBranch) {
+        const newRoles = currentRoles.filter((r) => r !== role);
+        if (newRoles.length === 0) {
+          const { [branchId]: _, ...rest } = prev;
+          newState = rest;
+        } else {
+          newState = { ...prev, [branchId]: newRoles };
+        }
+      } else {
+        newState = { ...prev, [branchId]: [...currentRoles, role] };
+      }
+      return newState;
+    });
+  };
+
+  const hasRole = (branchId: string, role: UserRole) => {
+    return branchPermissionsState[branchId]?.includes(role) || false;
+  };
+
+  const handleSubmit = async () => {
+    if (!staff) return;
+    setIsSubmitting(true);
+    try {
+      const permissions = updateFormBranchPermissions(branchPermissionsState);
+      await onSave(staff.memberId, permissions);
+      onOpenChange(false);
+    } catch (err) {
+      // Error handled by parent
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const branchPermissions = branchPermissionsState;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5" />
+            Edit Peran Karyawan
+          </DialogTitle>
+          <DialogDescription>
+            Atur peran {staff?.name} di setiap cabang
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-hidden flex flex-col gap-4">
+          {/* Staff Info */}
+          {staff && (
+            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <Avatar>
+                <AvatarImage src={staff.image || undefined} />
+                <AvatarFallback>{staff.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">{staff.name}</p>
+                <p className="text-sm text-gray-500">{staff.email}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Branch & Role Selection */}
+          <div className="flex-1 overflow-hidden">
+            <Label className="mb-2 block">Pilih Peran per Cabang</Label>
+            <p className="text-xs text-gray-500 mb-3">
+              Karyawan dapat memiliki peran berbeda di setiap cabang (multi-role)
+            </p>
+
+            {branchesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            ) : branches.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Building2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                <p>Belum ada cabang. Tambahkan cabang terlebih dahulu.</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[300px] pr-4">
+                <div className="space-y-4">
+                  {branches.filter(b => b.isActive).map((branch) => {
+                    const selectedRoles = branchPermissions[branch.id] || [];
+                    const isSelected = selectedRoles.length > 0;
+
+                    return (
+                      <Card
+                        key={branch.id}
+                        className={`transition-all ${
+                          isSelected ? "border-blue-500 bg-blue-50/50 dark:bg-blue-900/10" : ""
+                        }`}
+                      >
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <Building2 className="w-4 h-4" />
+                            {branch.name}
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            {branch.address}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex flex-wrap gap-2">
+                            {(["manager", "cashier", "courier"] as UserRole[]).map((role) => {
+                              const isChecked = hasRole(branch.id, role);
+                              return (
+                                <label
+                                  key={role}
+                                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+                                    isChecked
+                                      ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30"
+                                      : "border-gray-200 hover:border-gray-300 dark:border-gray-700"
+                                  }`}
+                                >
+                                  <Checkbox
+                                    checked={isChecked}
+                                    onCheckedChange={() => toggleRole(branch.id, role)}
+                                  />
+                                  <span className="text-sm">{ROLE_LABELS[role]}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {selectedRoles.length > 0 && (
+                            <div className="flex gap-1 mt-3">
+                              <span className="text-xs text-gray-500">Dipilih:</span>
+                              {selectedRoles.map((role) => (
+                                <RoleBadge key={role} role={role} size="sm" />
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t">
+          <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
+            Batal
+          </Button>
+          <Button disabled={isSubmitting} onClick={handleSubmit}>
+            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Simpan Perubahan
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -386,9 +610,10 @@ interface StaffRowProps {
   staff: StaffMember;
   onEdit: (staff: StaffMember) => void;
   onRemove: (staff: StaffMember) => void;
+  onResetPassword: (staff: StaffMember) => void;
 }
 
-function StaffRow({ staff, onEdit, onRemove }: StaffRowProps) {
+function StaffRow({ staff, onEdit, onRemove, onResetPassword }: StaffRowProps) {
   return (
     <TableRow>
       <TableCell>
@@ -448,6 +673,9 @@ function StaffRow({ staff, onEdit, onRemove }: StaffRowProps) {
             <DropdownMenuItem onClick={() => onEdit(staff)}>
               Edit Peran
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onResetPassword(staff)}>
+              Reset Password
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="text-red-600"
@@ -468,10 +696,10 @@ function StaffRow({ staff, onEdit, onRemove }: StaffRowProps) {
 
 export default function StaffPage() {
   const { isAuthenticated } = useAuth();
-  const { staff, isLoading, error, refetch, inviteStaff, removeStaff } = useStaff();
+  const { staff, isLoading, error, refetch, addStaff, updatePermissions, removeStaff } = useStaff();
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   // Filter staff
@@ -481,18 +709,30 @@ export default function StaffPage() {
       member.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Handle invite
-  const handleInvite = async (data: { email: string; branchPermissions: { branchId: string; roles: UserRole[] }[] }) => {
+  // Handle add staff
+  const handleAdd = async (data: AddStaffInput) => {
     try {
-      await inviteStaff({
-        email: data.email,
-        branchPermissions: data.branchPermissions,
-      });
-      gooeyToast.success("Undangan Terkirim", { 
-        description: `Undangan berhasil dikirim ke ${data.email}` 
+      await addStaff(data);
+      gooeyToast.success("Berhasil", { 
+        description: `${data.name} berhasil ditambahkan. Kata sandi default: vibeclean` 
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Gagal mengirim undangan";
+      const message = err instanceof Error ? err.message : "Gagal menambahkan karyawan";
+      gooeyToast.error("Gagal", { description: message });
+      throw err;
+    }
+  };
+
+  // Handle edit staff
+  const handleEdit = async (memberId: string, branchPermissions: { branchId: string; roles: UserRole[] }[]) => {
+    try {
+      await updatePermissions(memberId, { branchPermissions });
+      gooeyToast.success("Berhasil", { 
+        description: `Peran karyawan berhasil diperbarui` 
+      });
+      setEditingStaff(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gagal memperbarui peran";
       gooeyToast.error("Gagal", { description: message });
       throw err;
     }
@@ -512,6 +752,32 @@ export default function StaffPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal menghapus karyawan";
       gooeyToast.error("Gagal", { description: message });
+    }
+  };
+
+  // Handle reset password
+  const handleResetPassword = async (member: StaffMember) => {
+    if (!confirm(`Reset password ${member.name} ke 'vibeclean'?`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch("/api/staff", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: member.memberId }),
+      });
+
+      if (response.ok) {
+        gooeyToast.success("Berhasil", { 
+          description: `Password ${member.name} direset ke: vibeclean` 
+        });
+      } else {
+        const data = await response.json();
+        gooeyToast.error("Gagal", { description: data.error || "Gagal mereset password" });
+      }
+    } catch (err) {
+      gooeyToast.error("Gagal", { description: "Gagal mereset password" });
     }
   };
 
@@ -570,9 +836,9 @@ export default function StaffPage() {
                 Kelola karyawan dan atur peran mereka di setiap cabang
               </p>
             </div>
-            <Button onClick={() => setShowInviteDialog(true)}>
+            <Button onClick={() => setShowAddDialog(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Undang Karyawan
+              Tambah Karyawan
             </Button>
           </div>
 
@@ -615,9 +881,9 @@ export default function StaffPage() {
               <div className="block md:hidden space-y-3">
                 {filteredStaff.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    {searchQuery
+                  {searchQuery
                       ? "Tidak ada karyawan yang cocok dengan pencarian"
-                      : "Belum ada karyawan. Klik 'Undang Karyawan' untuk menambahkan."}
+                      : "Belum ada karyawan. Klik 'Tambah Karyawan' untuk menambahkan."}
                   </div>
                 ) : (
                   filteredStaff.map((member) => (
@@ -659,6 +925,7 @@ export default function StaffPage() {
                           staff={member}
                           onEdit={setEditingStaff}
                           onRemove={handleRemove}
+                          onResetPassword={handleResetPassword}
                         />
                       ))
                     )}
@@ -669,11 +936,19 @@ export default function StaffPage() {
           </Card>
         </div>
 
-        {/* Invite Dialog */}
-        <InviteStaffDialog
-          open={showInviteDialog}
-          onOpenChange={setShowInviteDialog}
-          onInvite={handleInvite}
+        {/* Add Staff Dialog */}
+        <AddStaffDialog
+          open={showAddDialog}
+          onOpenChange={setShowAddDialog}
+          onAdd={handleAdd}
+        />
+
+        {/* Edit Staff Dialog */}
+        <EditStaffDialog
+          open={!!editingStaff}
+          onOpenChange={(open) => !open && setEditingStaff(null)}
+          staff={editingStaff}
+          onSave={handleEdit}
         />
       </PermissionGuard>
     </>

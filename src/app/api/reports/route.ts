@@ -66,7 +66,7 @@ async function isOwner(userId: string): Promise<boolean> {
   return permissions.some((p) => p.role === "owner");
 }
 
-type PeriodType = "today" | "week" | "month" | "year";
+type PeriodType = "today" | "week" | "month" | "quarter" | "year";
 
 function getDateRange(period: PeriodType): {
   startDate: Date;
@@ -91,6 +91,15 @@ function getDateRange(period: PeriodType): {
       previousStartDate = new Date(startDate);
       previousStartDate.setDate(previousStartDate.getDate() - 7);
       previousEndDate = new Date(startDate);
+      break;
+    case "quarter":
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      const quarterStartMonth = currentQuarter * 3;
+      startDate = new Date(now.getFullYear(), quarterStartMonth, 1);
+      const prevQuarter = currentQuarter === 0 ? 3 : currentQuarter;
+      const prevQuarterYear = currentQuarter === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      previousStartDate = new Date(prevQuarterYear, (prevQuarter - 1) * 3, 1);
+      previousEndDate = new Date(prevQuarterYear, prevQuarter * 3, 1);
       break;
     case "year":
       startDate = new Date(now.getFullYear(), 0, 1);

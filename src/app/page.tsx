@@ -21,7 +21,7 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { motion, useAnimation, useInView, type Variants, type Easing } from "framer-motion";
@@ -252,6 +252,57 @@ const testimonials = [
   },
 ];
 
+// Animated Counter Component
+function AnimatedCounter({ end, duration = 2, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const controls = useAnimation();
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          let startTime: number;
+          let animationFrame: number;
+
+          const animate = (currentTime: number) => {
+            if (!startTime) startTime = currentTime;
+            const progress = Math.min((currentTime - startTime) / (duration * 1000), 1);
+            
+            // Easing function for smooth animation
+            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+            const currentCount = Math.floor(easeOutQuart * end);
+            
+            setCount(currentCount);
+
+            if (progress < 1) {
+              animationFrame = requestAnimationFrame(animate);
+            } else {
+              setCount(end);
+            }
+          };
+
+          animationFrame = requestAnimationFrame(animate);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [end, duration]);
+
+  return (
+    <span ref={ref} className="inline-block tabular-nums">
+      {count}{suffix}
+    </span>
+  );
+}
+
 // Testimonial Carousel Component
 function TestimonialCarousel() {
   const [emblaRef, emblaApi] = useEmblaCarousel(
@@ -416,13 +467,13 @@ export default function LandingPage() {
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <motion.div 
+            <motion.div
               className="flex items-center gap-2"
               whileHover={{ scale: 1.02 }}
               transition={{ type: "spring", stiffness: 400, damping: 10 }}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shadow-md">
-                V
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden">
+                <img src="/logo_vibeclean.png" alt="VibeClean" className="w-full h-full object-contain" />
               </div>
               <span className="text-xl font-bold text-foreground">VibeClean</span>
             </motion.div>
@@ -550,10 +601,121 @@ export default function LandingPage() {
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center">
+            {/* Logo VibeClean dengan Animasi */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1, 
+                y: 0,
+                rotate: [0, 2, -2, 0]
+              }}
+              transition={{ 
+                duration: 0.6,
+                rotate: {
+                  duration: 4,
+                  repeat: Infinity,
+                  repeatType: "reverse",
+                  ease: "easeInOut"
+                }
+              }}
+              className="mb-8 flex justify-center"
+            >
+              <div className="relative w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64">
+                {/* Animated Glow Background */}
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full blur-3xl"
+                  animate={{
+                    scale: [1, 1.2, 1],
+                    opacity: [0.5, 0.8, 0.5]
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                />
+                
+                {/* Floating Bubbles Animation */}
+                <motion.div
+                  className="absolute top-4 right-8 w-8 h-8 bg-primary/10 rounded-full blur-sm"
+                  animate={{
+                    y: [0, -20, 0],
+                    x: [0, 10, 0],
+                    scale: [1, 1.2, 1]
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0
+                  }}
+                />
+                <motion.div
+                  className="absolute top-8 left-4 w-6 h-6 bg-primary/15 rounded-full blur-sm"
+                  animate={{
+                    y: [0, -15, 0],
+                    x: [0, -8, 0],
+                    scale: [1, 1.3, 1]
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.5
+                  }}
+                />
+                <motion.div
+                  className="absolute bottom-12 right-16 w-5 h-5 bg-primary/10 rounded-full blur-sm"
+                  animate={{
+                    y: [0, -12, 0],
+                    x: [0, 5, 0],
+                    scale: [1, 1.1, 1]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 1
+                  }}
+                />
+                
+                {/* Main Logo */}
+                <motion.img
+                  src="/logo_vibeclean.png"
+                  alt="VibeClean - Robot Laundry"
+                  className="relative w-full h-full object-contain drop-shadow-2xl"
+                  animate={{
+                    y: [0, -10, 0],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                />
+                
+                {/* Shine Effect */}
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent rounded-full"
+                  animate={{
+                    x: ['-100%', '100%']
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    repeatDelay: 3,
+                    ease: "easeInOut"
+                  }}
+                  style={{ mixBlendMode: 'overlay' }}
+                />
+              </div>
+            </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
             >
               <Badge variant="secondary" className="mb-4 px-4 py-1.5 text-sm font-medium bg-primary/10 text-primary border-0">
                 Platform #1 untuk Bisnis Laundry di Indonesia
@@ -970,7 +1132,7 @@ export default function LandingPage() {
       {/* Testimonials Section with Carousel */}
       <section id="testimoni" className="bg-gradient-to-b from-muted/50 to-background py-20 sm:py-32 overflow-hidden">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div 
+          <motion.div
             className="text-center mb-16"
             initial="hidden"
             whileInView="visible"
@@ -979,7 +1141,7 @@ export default function LandingPage() {
           >
             <Badge variant="outline" className="mb-4">Testimoni</Badge>
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Dipercaya oleh 500+ Bisnis Laundry
+              Dipercaya oleh <AnimatedCounter end={500} suffix="+" /> Bisnis Laundry
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
               Lihat apa kata mereka tentang VibeClean
@@ -1079,12 +1241,12 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div className="col-span-2 md:col-span-1">
-              <motion.div 
+              <motion.div
                 className="flex items-center gap-2"
                 whileHover={{ scale: 1.02 }}
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shadow-md">
-                  V
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden">
+                  <img src="/logo_vibeclean.png" alt="VibeClean" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-xl font-bold text-foreground">VibeClean</span>
               </motion.div>

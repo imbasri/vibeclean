@@ -59,6 +59,9 @@ export interface Branch {
   address: string;
   phone: string;
   isActive: boolean;
+  qrColorDark?: string;
+  qrColorLight?: string;
+  qrLogoUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }

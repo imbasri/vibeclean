@@ -89,11 +89,16 @@ export type CreateBranchInput = z.infer<typeof createBranchSchema>;
 
 export const userRoles = ["owner", "manager", "cashier", "courier"] as const;
 
-export const inviteStaffSchema = z.object({
+export const addStaffSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Nama wajib diisi")
+    .min(2, "Nama minimal 2 karakter"),
   email: z
     .string()
     .min(1, "Email wajib diisi")
     .email("Format email tidak valid"),
+  phone: z.string().optional(),
   branchPermissions: z
     .array(
       z.object({
@@ -106,7 +111,11 @@ export const inviteStaffSchema = z.object({
     .min(1, "Minimal satu cabang harus dipilih"),
 });
 
-export type InviteStaffInput = z.infer<typeof inviteStaffSchema>;
+export type AddStaffInput = z.infer<typeof addStaffSchema>;
+
+// For backward compatibility
+export const inviteStaffSchema = addStaffSchema;
+export type InviteStaffInput = AddStaffInput;
 
 // ============================================
 // LAUNDRY SERVICE SCHEMA
@@ -174,7 +183,7 @@ export const createOrderSchema = z.object({
   customerPhone: z
     .string()
     .min(1, "Nomor HP pelanggan wajib diisi")
-    .regex(/^(\+62|62|0)8[1-9][0-9]{6,10}$/, "Format nomor HP tidak valid"),
+    .regex(/^[\d\s\+\-()]+$/, "Format nomor HP tidak valid"),
   items: z
     .array(createOrderItemSchema)
     .min(1, "Minimal satu item harus ditambahkan"),
@@ -184,6 +193,11 @@ export const createOrderSchema = z.object({
   couponCode: z.string().optional(),
   paymentMethod: z.enum(paymentMethods).optional(),
   notes: z.string().optional(),
+  // Member package fields
+  memberSubscriptionId: z.string().optional(),
+  memberDiscount: z.number().min(0).optional(),
+  // Auto-create customer
+  saveAsCustomer: z.boolean().optional(),
 });
 
 export const updateOrderStatusSchema = z.object({

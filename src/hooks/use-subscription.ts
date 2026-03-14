@@ -69,6 +69,12 @@ export function useSubscription(): UseSubscriptionReturn {
 
       const response = await fetch("/api/billing/usage");
 
+      if (response.status === 401) {
+        setError("Please log in to continue");
+        setIsLoading(false);
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to fetch usage");

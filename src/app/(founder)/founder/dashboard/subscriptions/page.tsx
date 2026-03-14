@@ -9,7 +9,10 @@ import {
   AlertCircle,
   MoreHorizontal,
   RefreshCw,
+  Wallet,
+  Sparkles,
 } from "lucide-react";
+import { gooeyToast } from "goey-toast";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,17 @@ interface Subscription {
   createdAt: string;
 }
 
+interface PendingInvoice {
+  id: string;
+  invoiceNumber: string;
+  organizationId: string;
+  organizationName: string;
+  plan: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+}
+
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   active: { color: "bg-green-100 text-green-800", icon: CheckCircle, label: "Aktif" },
   trial: { color: "bg-yellow-100 text-yellow-800", icon: Clock, label: "Trial" },
@@ -80,8 +94,10 @@ function formatDate(date: string | null): string {
 
 export default function FounderSubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<PendingInvoice | null>(null);
   const [isActivating, setIsActivating] = useState(false);
 
   const fetchSubscriptions = useCallback(async () => {
@@ -116,9 +132,21 @@ export default function FounderSubscriptionsPage() {
     }
   }, []);
 
+  const fetchPendingInvoices = useCallback(async () => {
+    try {
+      const response = await fetch("/api/founder/pending-invoices");
+      if (!response.ok) throw new Error("Failed to fetch");
+      const data = await response.json();
+      setPendingInvoices(data.invoices || []);
+    } catch (err) {
+      console.error("Error fetching pending invoices:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSubscriptions();
-  }, [fetchSubscriptions]);
+    fetchPendingInvoices();
+  }, [fetchSubscriptions, fetchPendingInvoices]);
 
   const handleActivate = async (orgId: string, plan: string) => {
     setIsActivating(true);
@@ -133,8 +161,32 @@ export default function FounderSubscriptionsPage() {
       
       setSelectedSub(null);
       fetchSubscriptions();
+      fetchPendingInvoices();
+      gooeyToast.success("Berhasil!", { description: "Subscription diaktifkan" });
     } catch (err) {
       console.error("Error activating:", err);
+      gooeyToast.error("Gagal", { description: "Tidak dapat mengaktifkan subscription" });
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const handleActivateFromInvoice = async (invoice: PendingInvoice) => {
+    setIsActivating(true);
+    try {
+      const response = await fetch(`/api/billing/invoice/${invoice.id}/confirm-payment`, {
+        method: "POST",
+      });
+      
+      if (!response.ok) throw new Error("Failed to activate");
+      
+      setSelectedInvoice(null);
+      fetchSubscriptions();
+      fetchPendingInvoices();
+      gooeyToast.success("Berhasil!", { description: `Paket ${invoice.plan} diaktifkan untuk ${invoice.organizationName}` });
+    } catch (err) {
+      console.error("Error activating:", err);
+      gooeyToast.error("Gagal", { description: "Tidak dapat mengaktifkan paket" });
     } finally {
       setIsActivating(false);
     }
@@ -196,6 +248,67 @@ export default function FounderSubscriptionsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Invoices - Needs Activation */}
+      {pendingInvoices.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-amber-800">
+                <Wallet className="h-5 w-5" />
+                Invoice Lunas - Perlu Aktivasi
+              </CardTitle>
+              <CardDescription className="text-amber-700">
+                {pendingInvoices.length} invoice sudah lunas tapi paket belum aktif
+              </CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={fetchPendingInvoices}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Organisasi</TableHead>
+                  <TableHead>Paket</TableHead>
+                  <TableHead className="text-right">Jumlah</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingInvoices.map((invoice) => (
+                  <TableRow key={invoice.id}>
+                    <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                    <TableCell>{invoice.organizationName}</TableCell>
+                    <TableCell className="capitalize">{invoice.plan}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
+                    <TableCell>
+                      <Badge className="bg-green-100 text-green-800">Lunas</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button 
+                        size="sm"
+                        className="bg-amber-600 hover:bg-amber-700"
+                        onClick={() => setSelectedInvoice(invoice)}
+                      >
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Aktifkan
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Table */}
       <Card>
@@ -308,6 +421,45 @@ export default function FounderSubscriptionsPage() {
                 disabled={isActivating}
               >
                 Enterprise
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activate from Invoice Dialog */}
+      <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aktivasi Paket</DialogTitle>
+            <DialogDescription>
+              Aktifkan paket untuk {selectedInvoice?.organizationName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-green-800">
+                <CheckCircle className="h-4 w-4 inline mr-1" />
+                Invoice {selectedInvoice?.invoiceNumber} sudah LUNAS
+              </p>
+              <p className="text-sm text-green-700 mt-1">
+                Klik "Aktifkan" untuk langsung mengaktifkan paket {selectedInvoice?.plan}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setSelectedInvoice(null)}
+              >
+                Batal
+              </Button>
+              <Button 
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => selectedInvoice && handleActivateFromInvoice(selectedInvoice)}
+                disabled={isActivating}
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                Aktifkan Paket
               </Button>
             </div>
           </div>

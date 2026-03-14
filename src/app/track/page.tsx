@@ -396,7 +396,7 @@ export function TrackOrderPageContent() {
                   )}
                 </div>
 
-                {orderData.order.notes && (
+                  {orderData.order.notes && (
                   <>
                     <Separator />
                     <div>
@@ -407,6 +407,71 @@ export function TrackOrderPageContent() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Membership Info Card */}
+            {orderData.membership && (
+              <Card className="mb-6 border-amber-200 bg-amber-50 dark:bg-amber-900/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <span className="text-xl">🎫</span>
+                    Paket Member Anda
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Paket</p>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100">
+                        {orderData.membership.packageName}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Diskon</p>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100">
+                        {orderData.membership.discountType === 'percentage' 
+                          ? `${orderData.membership.discountValue}%`
+                          : `Rp ${orderData.membership.discountValue?.toLocaleString('id-ID')}`
+                        }
+                      </p>
+                    </div>
+                    {orderData.membership.maxTransactionsPerMonth && (
+                      <>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Transaksi Bulan Ini</p>
+                          <p className="font-semibold text-amber-900 dark:text-amber-100">
+                            {orderData.membership.transactionsThisMonth || 0}x
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Sisa Transaksi</p>
+                          <p className="font-semibold text-green-600">
+                            {orderData.membership.remainingTransactions}x
+                          </p>
+                        </div>
+                      </>
+                    )}
+                    {orderData.membership.maxWeightKg && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Max Berat per Order</p>
+                        <p className="font-semibold text-amber-900 dark:text-amber-100">
+                          {orderData.membership.maxWeightKg} kg
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm text-muted-foreground">Berlaku Until</p>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100">
+                        {new Date(orderData.membership.endDate).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {orderData.branch && (
               <Card>

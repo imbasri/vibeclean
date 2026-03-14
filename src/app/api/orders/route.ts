@@ -13,8 +13,12 @@ import {
   organizations,
   branches,
   subscriptions,
+  membershipTiers,
+  customerMemberships,
+  coupons,
+  couponUsages,
 } from "@/lib/db";
-import { eq, and, inArray, desc, or, ilike, sql, gte } from "drizzle-orm";
+import { eq, and, inArray, desc, or, ilike, like, sql, gte } from "drizzle-orm";
 import { createOrderSchema } from "@/lib/validations/schemas";
 import { sendTemplatedEmail } from "@/lib/email";
 
@@ -40,6 +44,119 @@ async function getUserBranchIds(userId: string): Promise<string[]> {
     .where(eq(organizationMembers.userId, userId));
 
   return memberships.map((m) => m.branchId);
+}
+
+// Helper to award loyalty points
+async function awardLoyaltyPoints(
+  customerId: string,
+  orderTotal: number,
+  branchId: string
+): Promise<{ pointsEarned: number; newTier?: string }> {
+  try {
+    // Get customer's current membership
+    const [membership] = await db
+      .select()
+      .from(customerMemberships)
+      .where(eq(customerMemberships.customerId, customerId));
+
+    // Get branch's organization to find tiers
+    const [branch] = await db
+      .select({ organizationId: branches.organizationId })
+      .from(branches)
+      .where(eq(branches.id, branchId));
+
+    if (!branch) return { pointsEarned: 0 };
+
+    // Get all active tiers for the organization
+    const tiers = await db
+      .select()
+      .from(membershipTiers)
+      .where(
+        and(
+          eq(membershipTiers.organizationId, branch.organizationId),
+          eq(membershipTiers.isActive, true)
+        )
+      )
+      .orderBy(membershipTiers.minSpending);
+
+    // Calculate points: 1 point per Rp 1,000 spent
+    let pointsEarned = Math.floor(orderTotal / 1000);
+
+    // Get multiplier from current tier
+    let multiplier = 1;
+    if (membership) {
+      const currentTier = tiers.find((t) => t.id === membership.tierId);
+      if (currentTier) {
+        multiplier = Number(currentTier.pointMultiplier) || 1;
+      }
+    }
+
+    pointsEarned = Math.floor(pointsEarned * multiplier);
+
+    // Update customer points
+    await db
+      .update(customers)
+      .set({
+        loyaltyPoints: sql`${customers.loyaltyPoints} + ${pointsEarned}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(customers.id, customerId));
+
+    // Check if customer qualifies for tier upgrade
+    const [customer] = await db
+      .select({ totalSpent: customers.totalSpent })
+      .from(customers)
+      .where(eq(customers.id, customerId));
+
+    if (customer && tiers.length > 0) {
+      const totalSpent = Number(customer.totalSpent);
+      
+      // Find highest tier customer qualifies for
+      let newTierId: string | null = null;
+      for (const tier of tiers) {
+        if (totalSpent >= Number(tier.minSpending)) {
+          newTierId = tier.id;
+        } else {
+          break;
+        }
+      }
+
+      // Update tier if changed
+      if (newTierId && newTierId !== membership?.tierId) {
+        if (membership) {
+          await db
+            .update(customerMemberships)
+            .set({ tierId: newTierId, updatedAt: new Date() })
+            .where(eq(customerMemberships.customerId, customerId));
+        } else {
+          // Create new membership
+          await db.insert(customerMemberships).values({
+            customerId,
+            tierId: newTierId,
+            points: String(pointsEarned),
+            totalSpent: String(orderTotal),
+            totalOrders: 1,
+          });
+        }
+      } else if (membership) {
+        // Just update points
+        await db
+          .update(customerMemberships)
+          .set({
+            points: sql`${customerMemberships.points} + ${pointsEarned}`,
+            totalSpent: sql`${customerMemberships.totalSpent} + ${orderTotal}`,
+            totalOrders: sql`${customerMemberships.totalOrders} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(customerMemberships.customerId, customerId));
+      }
+    }
+
+    return { pointsEarned };
+  } catch (error) {
+    console.error("Error awarding loyalty points:", error);
+    return { pointsEarned: 0 };
+  }
 }
 
 // Helper to generate order number
@@ -413,20 +530,38 @@ export async function GET(request: NextRequest) {
 
 // POST /api/orders - Create a new order
 export async function POST(request: NextRequest) {
+  console.log("[POS Order] ========== START ==========");
+  
   try {
+    console.log("[POS Order] Getting session...");
     const session = await getSession();
+    console.log("[POS Order] Session result:", session ? `user: ${session.user.id}` : "null");
 
     if (!session?.user) {
+      console.log("[POS Order] No session - returning 401");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    console.log("[POS Order] Reading request body...");
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.error("[POS Order] Failed to parse body:", e);
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    console.log("[POS Order] Body received, keys:", Object.keys(body));
+    
     const { branchId, customerId, ...orderData } = body;
+    console.log("[POS Order] branchId:", branchId, "customerId:", customerId);
 
     // Validate order data
+    console.log("[POS Order] Validating order data...");
     const validationResult = createOrderSchema.safeParse(orderData);
+    console.log("[POS Order] Validation result:", validationResult.success ? "OK" : "FAILED");
 
     if (!validationResult.success) {
+      console.log("[POS Order] Validation errors:", validationResult.error.issues);
       return NextResponse.json(
         { error: "Validation failed", details: validationResult.error.issues },
         { status: 400 }
@@ -434,11 +569,54 @@ export async function POST(request: NextRequest) {
     }
 
     const validData = validationResult.data;
+    console.log("[POS Order] Validated data OK");
+
+    // Find or create customer if saveAsCustomer is true
+    let finalCustomerId = customerId;
+    if (!finalCustomerId && validData.saveAsCustomer) {
+      // Get branch to find organization
+      const [branch] = await db
+        .select({ organizationId: branches.organizationId })
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1);
+      
+      // Search for existing customer by phone
+      const phoneToSearch = validData.customerPhone.replace(/^0/, "62");
+      const [existingCustomer] = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .where(
+          or(
+            eq(customers.phone, validData.customerPhone),
+            eq(customers.phone, phoneToSearch)
+          )
+        )
+        .limit(1);
+
+      if (existingCustomer) {
+        finalCustomerId = existingCustomer.id;
+      } else if (branch) {
+        // Create new customer
+        const [newCustomer] = await db
+          .insert(customers)
+          .values({
+            name: validData.customerName,
+            phone: validData.customerPhone,
+            organizationId: branch.organizationId,
+          })
+          .returning();
+        finalCustomerId = newCustomer.id;
+      }
+    }
+    console.log("[POS Order] Final customer ID:", finalCustomerId);
 
     // Verify user has access to the branch
     const userBranchIds = await getUserBranchIds(session.user.id);
+    console.log("[POS Order] User branch IDs:", userBranchIds);
 
     if (!branchId || !userBranchIds.includes(branchId)) {
+      console.log("[POS Order] Access denied - branchId:", branchId, "userBranchIds:", userBranchIds);
       return NextResponse.json(
         { error: "Akses ke cabang ini tidak diizinkan" },
         { status: 403 }
@@ -446,6 +624,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription order limit
+    console.log("[POS Order] Checking order limit for branch:", branchId);
     const limitCheck = await checkOrderLimit(branchId);
     if (!limitCheck.allowed) {
       return NextResponse.json(
@@ -518,14 +697,25 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    // Get organization ID for coupon validation
+    const [branchInfo] = await db
+      .select({ organizationId: branches.organizationId })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+
+    const organizationId = branchInfo?.organizationId;
+
     // Calculate discount
     let discountAmount = 0;
     let memberDiscountAmount = 0;
     let memberSubscriptionId: string | null = null;
     let memberDiscountInfo: { type: string; value: number; name: string } | null = null;
+    let appliedDiscountType: string | null = validData.discountType || null;
+    let appliedDiscountReason: string | null = validData.discountReason || null;
 
     // Check for member discount first
-    if (customerId && subtotal > 0) {
+    if (finalCustomerId && subtotal > 0) {
       try {
         const { memberSubscriptions, memberPackages } = await import("@/lib/db");
         const now = new Date();
@@ -580,8 +770,88 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Apply manual discount (coupon, etc)
-    if (validData.discount && validData.discountType) {
+    // Apply coupon discount (server-side validation for security)
+    let appliedCouponCode: string | null = null;
+    if (validData.couponCode) {
+      try {
+        // Validate coupon server-side
+        const [coupon] = await db
+          .select()
+          .from(coupons)
+          .where(and(
+            eq(coupons.organizationId, organizationId),
+            eq(coupons.code, validData.couponCode.toUpperCase())
+          ))
+          .limit(1);
+
+        if (!coupon) {
+          return NextResponse.json(
+            { error: "Kupon tidak ditemukan" },
+            { status: 400 }
+          );
+        }
+
+        if (!coupon.isActive) {
+          return NextResponse.json(
+            { error: "Kupon sudah tidak aktif" },
+            { status: 400 }
+          );
+        }
+
+        const now = new Date();
+        if (coupon.validFrom && new Date(coupon.validFrom) > now) {
+          return NextResponse.json(
+            { error: "Kupon belum berlaku" },
+            { status: 400 }
+          );
+        }
+
+        if (coupon.validUntil && new Date(coupon.validUntil) < now) {
+          return NextResponse.json(
+            { error: "Kupon sudah kedaluwarsa" },
+            { status: 400 }
+          );
+        }
+
+        if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+          return NextResponse.json(
+            { error: "Kuota kupon sudah habis" },
+            { status: 400 }
+          );
+        }
+
+        if (coupon.minOrderAmount && subtotal < parseFloat(coupon.minOrderAmount)) {
+          return NextResponse.json(
+            { 
+              error: `Minimal order Rp ${parseFloat(coupon.minOrderAmount).toLocaleString("id-ID")} untuk menggunakan kupon ini` 
+            },
+            { status: 400 }
+          );
+        }
+
+        // Calculate coupon discount
+        const couponValue = parseFloat(coupon.value);
+        if (coupon.type === "percentage") {
+          discountAmount = (subtotal * couponValue) / 100;
+          // Apply max discount cap if set
+          if (coupon.maxDiscount && discountAmount > parseFloat(coupon.maxDiscount)) {
+            discountAmount = parseFloat(coupon.maxDiscount);
+          }
+        } else {
+          discountAmount = Math.min(couponValue, subtotal);
+        }
+
+        appliedCouponCode = coupon.code;
+
+        // Store discount type for display
+        appliedDiscountType = coupon.type;
+        appliedDiscountReason = `Kupon: ${coupon.code}`;
+      } catch (couponErr) {
+        console.error("Error validating coupon:", couponErr);
+        // Continue without coupon if validation fails
+      }
+    } else if (validData.discount && validData.discountType) {
+      // Manual discount (not from coupon) - only allow if no coupon code provided
       if (validData.discountType === "percentage") {
         discountAmount = (subtotal * validData.discount) / 100;
       } else {
@@ -613,14 +883,14 @@ export async function POST(request: NextRequest) {
         .values({
           orderNumber,
           branchId,
-          customerId: customerId || null,
+          customerId: finalCustomerId || null,
           customerName: validData.customerName,
           customerPhone: validData.customerPhone,
           subtotal: String(subtotal),
           discount: String(discountAmount),
-          discountType: validData.discountType || null,
-          discountReason: validData.discountReason || null,
-          couponCode: validData.couponCode || null,
+          discountType: appliedDiscountType,
+          discountReason: appliedDiscountReason,
+          couponCode: appliedCouponCode,
           total: String(total),
           status: initialStatus,
           paymentStatus: initialPaymentStatus,
@@ -658,25 +928,54 @@ export async function POST(request: NextRequest) {
           orderId: newOrder.id,
           fromStatus: "pending",
           toStatus: "processing",
-          changedBy: "system",
+          changedBy: session.user.id, // Use actual user ID instead of "system"
           notes: "Pembayaran tunai - langsung diproses",
         });
       }
 
-      // Update customer stats if customerId is provided
-      if (customerId) {
-        await tx
-          .update(customers)
-          .set({
-            totalOrders: sql`${customers.totalOrders} + 1`,
-            totalSpent: sql`${customers.totalSpent} + ${total}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(customers.id, customerId));
+      // Track coupon usage if coupon was applied
+      if (appliedCouponCode) {
+        const [couponRecord] = await tx
+          .select()
+          .from(coupons)
+          .where(eq(coupons.code, appliedCouponCode))
+          .limit(1);
+        
+        if (couponRecord) {
+          await tx.insert(couponUsages).values({
+            couponId: couponRecord.id,
+            orderId: newOrder.id,
+            userId: finalCustomerId || session.user.id,
+            customerPhone: validData.customerPhone,
+            discountAmount: String(discountAmount),
+          });
+
+          // Update coupon usage count
+          await tx
+            .update(coupons)
+            .set({ usageCount: (couponRecord.usageCount || 0) + 1 })
+            .where(eq(coupons.id, couponRecord.id));
+        }
       }
 
       return { order: newOrder, items: insertedItems };
     });
+    if (finalCustomerId) {
+      await db
+        .update(customers)
+        .set({
+          totalOrders: sql`${customers.totalOrders} + 1`,
+          totalSpent: sql`${customers.totalSpent} + ${total}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, finalCustomerId));
+    }
+    
+    if (finalCustomerId && initialPaymentStatus === "paid") {
+      awardLoyaltyPoints(finalCustomerId, total, branchId).catch((err) => {
+        console.error("Failed to award loyalty points:", err);
+      });
+    }
 
     // Increment subscription order count (non-blocking)
     incrementSubscriptionOrderCount(branchId).catch((err) => {
@@ -727,8 +1026,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ order: orderResponse }, { status: 201 });
   } catch (error) {
     console.error("Error creating order:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : "";
     return NextResponse.json(
-      { error: "Failed to create order" },
+      { error: "Failed to create order", details: errorMessage, stack: errorStack },
       { status: 500 }
     );
   }

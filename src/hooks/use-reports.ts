@@ -67,7 +67,7 @@ export interface ReportsData {
   };
 }
 
-export type PeriodType = "today" | "week" | "month" | "year";
+export type PeriodType = "today" | "week" | "month" | "quarter" | "year";
 
 interface UseReportsOptions {
   branchId?: string;

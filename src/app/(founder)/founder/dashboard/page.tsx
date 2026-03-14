@@ -15,12 +15,27 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  Wallet,
+  Banknote,
+  Receipt,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+} from "recharts";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Stats {
   organizations: {
@@ -36,10 +51,16 @@ interface Stats {
     lastMonth: number;
     growth: number;
     mrr: number;
+    arr: number;
   };
   orders: {
     total: number;
     thisMonth: number;
+    gmv: number;
+    gmvThisMonth: number;
+  };
+  branches: {
+    total: number;
   };
 }
 
@@ -54,6 +75,13 @@ interface Organization {
     name: string | null;
     email: string | null;
   };
+}
+
+interface RevenueChartData {
+  label: string;
+  revenue: number;
+  orders: number;
+  transactionFees: number;
 }
 
 const PLAN_COLORS: Record<string, string> = {
@@ -82,9 +110,19 @@ function formatNumber(num: number): string {
   return new Intl.NumberFormat("id-ID").format(num);
 }
 
+function formatCompact(num: number): string {
+  if (num >= 1000000000) return (num / 1000000000).toFixed(1) + "M";
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + "jt";
+  if (num >= 1000) return (num / 1000).toFixed(1) + "rb";
+  return num.toString();
+}
+
 export default function FounderDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentOrgs, setRecentOrgs] = useState<Organization[]>([]);
+  const [chartData, setChartData] = useState<RevenueChartData[]>([]);
+  const [chartPeriod, setChartPeriod] = useState("30d");
+  const [chartLoading, setChartLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,11 +155,29 @@ export default function FounderDashboardPage() {
     }
   }, []);
 
+  const fetchChartData = useCallback(async () => {
+    setChartLoading(true);
+    try {
+      const response = await fetch(`/api/admin/revenue-chart?period=${chartPeriod}`);
+      if (!response.ok) throw new Error("Failed to fetch chart data");
+      const data = await response.json();
+      setChartData(data.data || []);
+    } catch (err) {
+      console.error("Error fetching chart data:", err);
+    } finally {
+      setChartLoading(false);
+    }
+  }, [chartPeriod]);
+
   useEffect(() => {
     Promise.all([fetchStats(), fetchOrganizations()]).finally(() => {
       setIsLoading(false);
     });
   }, [fetchStats, fetchOrganizations]);
+
+  useEffect(() => {
+    fetchChartData();
+  }, [fetchChartData]);
 
   if (isLoading) {
     return (
@@ -168,10 +224,10 @@ export default function FounderDashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Row 1 */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Total Organizations */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Organisasi</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -185,16 +241,17 @@ export default function FounderDashboardPage() {
               dari bulan lalu
             </p>
           </CardContent>
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
         </Card>
 
         {/* Total Revenue */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats?.revenue.total || 0)}</div>
+            <div className="text-2xl font-bold">{formatCompact(stats?.revenue.total || 0)}</div>
             <p className="text-xs text-muted-foreground">
               <span className={revenueGrowth >= 0 ? "text-green-500" : "text-red-500"}>
                 {revenueGrowth >= 0 ? "+" : ""}{revenueGrowth}%
@@ -202,34 +259,170 @@ export default function FounderDashboardPage() {
               dari bulan lalu
             </p>
           </CardContent>
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-green-500 to-green-600" />
         </Card>
 
         {/* MRR */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Recurring Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">Monthly Recurring</CardTitle>
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats?.revenue.mrr || 0)}</div>
-            <p className="text-xs text-muted-foreground">Per bulan ini</p>
+            <div className="text-2xl font-bold">{formatCompact(stats?.revenue.mrr || 0)}</div>
+            <p className="text-xs text-muted-foreground">ARR: {formatCompact(stats?.revenue.arr || 0)}/tahun</p>
+          </CardContent>
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-purple-500 to-purple-600" />
+        </Card>
+
+        {/* Transaction Fees (New!) */}
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Transaction Fees</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCompact((stats?.orders.gmvThisMonth || 0) * 0.005)}</div>
+            <p className="text-xs text-muted-foreground">Dari {formatNumber(stats?.orders.thisMonth || 0)} orders bulan ini</p>
+          </CardContent>
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-orange-500 to-orange-600" />
+        </Card>
+      </div>
+
+      {/* Stats Cards - Row 2 */}
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {/* Orders */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium">Total Orders</CardTitle>
+            <Package className="h-3 w-3 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">{formatNumber(stats?.orders.total || 0)}</div>
           </CardContent>
         </Card>
 
         {/* Orders This Month */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orders Bulan Ini</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs font-medium">Orders Bulan Ini</CardTitle>
+            <Package className="h-3 w-3 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(stats?.orders.thisMonth || 0)}</div>
-            <p className="text-xs text-muted-foreground">
-              Total: {formatNumber(stats?.orders.total || 0)}
-            </p>
+            <div className="text-xl font-bold">{formatNumber(stats?.orders.thisMonth || 0)}</div>
+          </CardContent>
+        </Card>
+
+        {/* GMV */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium">Total GMV</CardTitle>
+            <Banknote className="h-3 w-3 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">{formatCompact(stats?.orders.gmv || 0)}</div>
+          </CardContent>
+        </Card>
+
+        {/* GMV This Month */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium">GMV Bulan Ini</CardTitle>
+            <Banknote className="h-3 w-3 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">{formatCompact(stats?.orders.gmvThisMonth || 0)}</div>
+          </CardContent>
+        </Card>
+
+        {/* Active Orgs */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium">Organisasi Aktif</CardTitle>
+            <CheckCircle className="h-3 w-3 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">{formatNumber(stats?.organizations.byStatus.active || 0)}</div>
+          </CardContent>
+        </Card>
+
+        {/* Trial Orgs */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium">Trial</CardTitle>
+            <Clock className="h-3 w-3 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">{formatNumber(stats?.organizations.byStatus.trial || 0)}</div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue Chart */}
+      <Card className="col-span-full">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Revenue Overview</CardTitle>
+            <CardDescription>Tren revenue dari waktu ke waktu</CardDescription>
+          </div>
+          <Tabs value={chartPeriod} onValueChange={setChartPeriod} className="w-auto">
+            <TabsList>
+              <TabsTrigger value="7d">7 Hari</TabsTrigger>
+              <TabsTrigger value="30d">30 Hari</TabsTrigger>
+              <TabsTrigger value="90d">90 Hari</TabsTrigger>
+              <TabsTrigger value="12m">12 Bulan</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </CardHeader>
+        <CardContent className="h-[350px]">
+          {chartLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <Skeleton className="h-full w-full" />
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis 
+                  dataKey="label" 
+                  className="text-xs"
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis 
+                  className="text-xs"
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => formatCompact(value)}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: "hsl(var(--card))", 
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px"
+                  }}
+                  formatter={(value) => [formatCurrency(Number(value) || 0), "Revenue"]}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Plan Distribution & Recent Orgs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -277,6 +470,24 @@ export default function FounderDashboardPage() {
                   </span>
                 </div>
               </div>
+              
+              {/* Plan Stats Summary */}
+              <div className="mt-6 pt-4 border-t">
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(stats?.revenue.mrr || 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">MRR dari Pro</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-purple-600">
+                      {formatNumber(stats?.organizations.byPlan.enterprise || 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Enterprise</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -314,6 +525,11 @@ export default function FounderDashboardPage() {
                   </div>
                 ))
               )}
+            </div>
+            <div className="mt-4 pt-4 border-t">
+              <Link href="/founder/dashboard/organizations" className="text-sm text-blue-600 hover:underline">
+                Lihat semua organisasi →
+              </Link>
             </div>
           </CardContent>
         </Card>

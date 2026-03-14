@@ -120,7 +120,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, address, phone, isActive } = body;
+    const { name, address, phone, isActive, qrColorDark, qrColorLight } = body;
 
     // Build update object
     const updateData: Partial<{
@@ -128,6 +128,8 @@ export async function PATCH(
       address: string;
       phone: string;
       isActive: boolean;
+      qrColorDark: string;
+      qrColorLight: string;
       updatedAt: Date;
     }> = {
       updatedAt: new Date(),
@@ -137,6 +139,8 @@ export async function PATCH(
     if (address !== undefined) updateData.address = address;
     if (phone !== undefined) updateData.phone = phone;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (qrColorDark !== undefined) updateData.qrColorDark = qrColorDark;
+    if (qrColorLight !== undefined) updateData.qrColorLight = qrColorLight;
 
     // Update the branch
     const [updatedBranch] = await db
@@ -155,8 +159,9 @@ export async function PATCH(
     return NextResponse.json({ branch: updatedBranch });
   } catch (error) {
     console.error("Error updating branch:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to update branch" },
+      { error: "Failed to update branch", details: errorMessage },
       { status: 500 }
     );
   }

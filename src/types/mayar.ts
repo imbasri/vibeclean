@@ -135,6 +135,7 @@ export interface PaymentRequest {
   paymentType: PaymentType;
   description?: string;
   expiredInMinutes?: number;
+  extraData?: Record<string, string>;
 }
 
 export interface PaymentResponse {

@@ -6,6 +6,9 @@ import {
   orderStatusHistory,
   branches,
   organizations,
+  customers,
+  memberSubscriptions,
+  memberPackages,
 } from "@/lib/db";
 import { eq, and, desc, or, like, sql } from "drizzle-orm";
 
@@ -93,6 +96,68 @@ export async function GET(
       .where(eq(orderStatusHistory.orderId, order.id))
       .orderBy(desc(orderStatusHistory.createdAt));
 
+    // Get customer membership info
+    let membershipInfo = null;
+    const customerPhone = order.customerPhone?.replace(/^0/, "62");
+    
+    if (customerPhone) {
+      // Find customer by phone
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(
+          or(
+            like(customers.phone, `%${customerPhone}%`),
+            like(customers.phone, `%${order.customerPhone}%`)
+          )
+        )
+        .limit(1);
+
+      if (customer) {
+        // Check for active membership
+        const now = new Date();
+        const [subscription] = await db
+          .select({
+            id: memberSubscriptions.id,
+            packageName: memberPackages.name,
+            price: memberPackages.price,
+            discountType: memberPackages.discountType,
+            discountValue: memberPackages.discountValue,
+            maxWeightKg: memberPackages.maxWeightKg,
+            maxTransactionsPerMonth: memberPackages.maxTransactionsPerMonth,
+            transactionsThisMonth: memberSubscriptions.transactionsThisMonth,
+            endDate: memberSubscriptions.endDate,
+          })
+          .from(memberSubscriptions)
+          .innerJoin(memberPackages, eq(memberSubscriptions.packageId, memberPackages.id))
+          .where(
+            and(
+              eq(memberSubscriptions.customerId, customer.id),
+              eq(memberSubscriptions.organizationId, branch?.organizationId || ""),
+              eq(memberSubscriptions.status, "active"),
+              sql`${memberSubscriptions.endDate} >= ${now}`
+            )
+          )
+          .limit(1);
+
+        if (subscription) {
+          membershipInfo = {
+            packageName: subscription.packageName,
+            price: Number(subscription.price),
+            discountType: subscription.discountType,
+            discountValue: Number(subscription.discountValue),
+            maxWeightKg: subscription.maxWeightKg ? Number(subscription.maxWeightKg) : null,
+            maxTransactionsPerMonth: subscription.maxTransactionsPerMonth ? Number(subscription.maxTransactionsPerMonth) : null,
+            transactionsThisMonth: subscription.transactionsThisMonth || 0,
+            remainingTransactions: subscription.maxTransactionsPerMonth 
+              ? Number(subscription.maxTransactionsPerMonth) - (subscription.transactionsThisMonth || 0)
+              : null,
+            endDate: subscription.endDate,
+          };
+        }
+      }
+    }
+
     const response = {
       success: true,
       order: {
@@ -132,6 +197,7 @@ export async function GET(
             logo: organization.logo,
           }
         : null,
+      membership: membershipInfo,
     };
 
     return NextResponse.json(response);

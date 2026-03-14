@@ -1,72 +1,37 @@
-# Implementation Notes
+# VibeClean - Dokumentasi Implementasi
 
-Setiap perubahan signifikan pada codebase harus didokumentasikan di folder ini agar AI agent dapat mengingat sejarah perubahan.
+Folder ini berisi dokumentasi progress dan laporan dari setiap tahap implementasi project VibeClean.
 
-## Riwayat Implementasi
+## Tujuan
 
-- [2026-03-11: UploadThing Integration](./2026-03-11-uploadthing/README.md)
-- [2026-03-11: Member Packages](./2026-03-11-member-packages/README.md)
-- [2026-03-11: Export Features](./2026-03-11-export-features/README.md)
-- [2026-03-12: Custom Domain Enhancement](./2026-03-12-custom-domain-enhancement/README.md)
-- [2026-03-12: Sticky Navbar & Tax Report](./2026-03-12-sticky-navbar-tax-report/README.md)
+Dokumentasi ini dibuat agar:
+1. Jika session/token habis, kita bisa melanjutkan dengan mudah
+2. Tracking progress yang sudah dikerjakan
+3. Referensi untuk pengembangan selanjutnya
 
-## Struktur
+## Struktur Folder
 
 ```
-implementation/
-├── README.md                    # Panduan ini
-├── 2026-03-11-uploadthing/     # Implementasi UploadThing
-│   ├── README.md               # Detail perubahan
-│   └── files-changed.md        # List file yang diubah
-└── ...
+implementasi/
+├── README.md                    # File ini
+├── 00-PROJECT-CONTEXT.md        # Konteks utama project
+├── 01-SETUP-AWAL.md             # Setup project awal
+├── 02-FRONTEND-PAGES.md         # Daftar halaman frontend
+├── 03-IMPROVEMENTS.md           # Perbaikan UI/UX
+├── 04-BACKEND-PLAN.md           # Rencana implementasi backend
+└── NEXT-STEPS.md                # Langkah selanjutnya yang harus dikerjakan
 ```
 
-## Cara Dokumentasi
+## Quick Start untuk Session Baru
 
-### 1. Buat Folder Baru
-Format: `YYYY-MM-nama-feature`
+Jika memulai session baru, berikan context ini ke AI:
 
-Contoh: `2026-03-11-uploadthing`
-
-### 2. Buat File Dokumentasi
-
-**README.md:**
-```markdown
-# [Nama Feature]
-
-## Tanggal
-YYYY-MM-DD
-
-## Deskripsi
-Penjelasan singkat perubahan
-
-## Alasan
-Mengapa perubahan ini dilakukan
-
-## Hasil
-Apa yang dicapai
+```
+Lanjutkan project VibeClean. Baca file di folder `implementasi/` untuk context lengkap, khususnya:
+1. implementasi/00-PROJECT-CONTEXT.md - untuk memahami project
+2. implementasi/NEXT-STEPS.md - untuk tahu apa yang harus dikerjakan selanjutnya
 ```
 
-**files-changed.md:**
-```markdown
-## File Diubah
-- src/app/layout.tsx
-- src/utils/uploadthing.ts
+## Last Updated
 
-## File Baru
-- src/components/common/upload-button.tsx
-
-## File Dihapus
-- (jika ada)
-```
-
-### 3. Update Main README
-Tambahkan link ke implementasi baru di README utama.
-
----
-
-## Catatan
-
-- Gunakan bahasa Indonesia untuk konsistensi
-- Sertakan reason di setiap perubahan
-- Update catatan ini saat ada perubahan besar
+2024-01-XX (Update tanggal setiap ada perubahan)

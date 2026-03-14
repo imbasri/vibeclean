@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, type Variants, type Easing } from "framer-motion";
+import { useReportsStore } from "@/stores";
+import { useReports, type PeriodType } from "@/hooks/use-reports";
 import {
   TrendingUp,
+  TrendingDown,
   DollarSign,
   ShoppingBag,
   Users,
@@ -16,11 +19,33 @@ import {
   ArrowDownRight,
   Loader2,
   AlertCircle,
+  FileText,
+  Printer,
+  Building2,
+  ArrowRightLeft,
+  Settings,
+  Save,
+  Filter,
+  Search,
 } from "lucide-react";
 import { gooeyToast } from "goey-toast";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+} from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -30,11 +55,13 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { formatCurrency } from "@/lib/utils";
-import { useReports, type PeriodType } from "@/hooks/use-reports";
 
-// Animation config
 const easeOut: Easing = [0.16, 1, 0.3, 1];
 
 const containerVariants: Variants = {
@@ -57,527 +84,517 @@ const itemVariants: Variants = {
   },
 };
 
+type ReportPeriod = "today" | "week" | "month" | "quarter" | "year";
+
+const handleExport = () => {
+  gooeyToast("Mencoba mengekspor laporan...");
+};
+
 export default function ReportsPage() {
-  const [period, setPeriod] = useState<PeriodType>("week");
-  
-  // Fetch reports data from API
-  const { data, isLoading, error, refetch } = useReports({ period });
+  // Zustand store
+  const { period, setPeriod, activeTab, setActiveTab, taxSettings, setTaxSettings } = useReportsStore();
+  const [mounted, setMounted] = useState(false);
 
-  const handleExport = async () => {
-    try {
-      gooeyToast.success("Export Dimulai", { description: "Laporan sedang diunduh..." });
-      
-      // Build URL with current period parameters
-      const params = new URLSearchParams();
-      params.set("format", "excel");
-      
-      // Add date range based on period
-      const now = new Date();
-      let startDate: Date;
-      
-      switch (period) {
-        case "today":
-          startDate = new Date(now.setHours(0, 0, 0, 0));
-          break;
-        case "week":
-          startDate = new Date(now);
-          startDate.setDate(startDate.getDate() - 7);
-          break;
-        case "month":
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-        case "year":
-          startDate = new Date(now.getFullYear(), 0, 1);
-          break;
-        default:
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      }
-      
-      params.set("start", startDate.toISOString().split("T")[0]);
-      params.set("end", new Date().toISOString().split("T")[0]);
-      
-      // Trigger download
-      const response = await fetch(`/api/reports/export?${params.toString()}`);
-      
-      if (!response.ok) {
-        throw new Error("Export failed");
-      }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `laporan-orders-${new Date().toISOString().split("T")[0]}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      gooeyToast.success("Berhasil", { description: "Laporan berhasil diunduh!" });
-    } catch (error) {
-      console.error("Export error:", error);
-      gooeyToast.error("Gagal", { description: "Gagal mengekspor laporan" });
-    }
-  };
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  // Calculate max for bar chart
-  const maxRevenue = data?.revenue.daily.length 
-    ? Math.max(...data.revenue.daily.map((d) => d.amount))
-    : 0;
+  const { data, isLoading, error, refetch } = useReports({ period: period as PeriodType });
 
-  // Loading state
-  if (isLoading) {
+  const completedOrders = useMemo(() => {
+    if (!data?.orders.byStatus) return 0;
+    const completed = data.orders.byStatus.find(s => s.status === "completed");
+    return completed?.count || 0;
+  }, [data]);
+
+  const summaryData = useMemo(() => ({
+    totalRevenue: data?.revenue.total || 0,
+    totalOrders: data?.orders.total || 0,
+    avgOrderValue: data?.orders.total && data.revenue.total ? data.revenue.total / data.orders.total : 0,
+    completedOrders: completedOrders,
+    growth: data?.revenue.change || 0,
+    ordersGrowth: data?.orders.change || 0,
+  }), [data, completedOrders]);
+
+  if (!mounted) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-          <p className="text-gray-500">Memuat laporan...</p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[60vh]">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6 text-center space-y-4">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-            <div>
-              <h3 className="font-semibold text-lg">Gagal Memuat Laporan</h3>
-              <p className="text-gray-500 text-sm mt-1">{error}</p>
-            </div>
-            <Button onClick={() => refetch()} variant="outline">
-              Coba Lagi
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Empty state
-  if (!data) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[60vh]">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6 text-center space-y-4">
-            <BarChart3 className="h-12 w-12 text-gray-400 mx-auto" />
-            <div>
-              <h3 className="font-semibold text-lg">Belum Ada Data</h3>
-              <p className="text-gray-500 text-sm mt-1">
-                Data laporan akan muncul setelah ada transaksi.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const { revenue, orders, services, customers, branches } = data;
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: easeOut }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Laporan & Analitik</h1>
-          <p className="text-gray-500 mt-1">Pantau performa bisnis laundry Anda</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodType)}>
-            <SelectTrigger className="w-[150px]">
-              <Calendar className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Hari Ini</SelectItem>
-              <SelectItem value="week">Minggu Ini</SelectItem>
-              <SelectItem value="month">Bulan Ini</SelectItem>
-              <SelectItem value="year">Tahun Ini</SelectItem>
-            </SelectContent>
-          </Select>
-          <PermissionGuard allowedRoles={["owner", "manager"]}>
+    <PermissionGuard feature="reports">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Laporan & Analytics</h1>
+            <p className="text-muted-foreground">Pantau performa bisnis laundry Anda</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={period} onValueChange={(v) => setPeriod(v as ReportPeriod)}>
+              <SelectTrigger className="w-[150px]">
+                <Calendar className="w-4 h-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="day">Hari Ini</SelectItem>
+                <SelectItem value="week">Minggu Ini</SelectItem>
+                <SelectItem value="month">Bulan Ini</SelectItem>
+                <SelectItem value="quarter">Kuartal Ini</SelectItem>
+                <SelectItem value="year">Tahun Ini</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-          </PermissionGuard>
+          </div>
         </div>
-      </motion.div>
 
-      {/* Key Metrics */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-      >
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total Pendapatan</p>
-                  <p className="text-2xl font-bold mt-1">{formatCurrency(revenue.total)}</p>
-                  <div className={`flex items-center gap-1 text-sm mt-1 ${revenue.isPositive ? "text-green-600" : "text-red-600"}`}>
-                    {revenue.isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                    <span>{revenue.change}%</span>
-                    <span className="text-gray-400">vs periode lalu</span>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+            <TabsTrigger value="ringkasan" className="gap-1">
+              <BarChart3 className="w-4 h-4" />
+              Ringkasan
+            </TabsTrigger>
+            <TabsTrigger value="transaksi" className="gap-1">
+              <ShoppingBag className="w-4 h-4" />
+              Transaksi
+            </TabsTrigger>
+            <TabsTrigger value="pajak" className="gap-1">
+              <FileText className="w-4 h-4" />
+              Pajak
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1">
+              <PieChart className="w-4 h-4" />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab 1: Ringkasan */}
+          <TabsContent value="ringkasan" className="space-y-6">
+            {isLoading ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32" />)}
+              </div>
+            ) : (
+              <motion.div 
+                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                <motion.div variants={itemVariants}>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Pendapatan</CardTitle>
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{formatCurrency(summaryData.totalRevenue)}</div>
+                      <p className="text-xs text-muted-foreground flex items-center mt-1">
+                        {summaryData.growth >= 0 ? <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" /> : <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />}
+                        <span className={summaryData.growth >= 0 ? "text-green-500" : "text-red-500"}>{Math.abs(summaryData.growth)}%</span>
+                        <span className="ml-1">dari periode sebelumnya</span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div variants={itemVariants}>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Order</CardTitle>
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{summaryData.totalOrders}</div>
+                      <p className="text-xs text-muted-foreground flex items-center mt-1">
+                        {summaryData.ordersGrowth >= 0 ? <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" /> : <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />}
+                        <span className={summaryData.ordersGrowth >= 0 ? "text-green-500" : "text-red-500"}>{Math.abs(summaryData.ordersGrowth)}%</span>
+                        <span className="ml-1">dari periode sebelumnya</span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div variants={itemVariants}>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Rata-rata Order</CardTitle>
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{formatCurrency(summaryData.avgOrderValue)}</div>
+                      <p className="text-xs text-muted-foreground mt-1">per transaksi</p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div variants={itemVariants}>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Order Selesai</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{summaryData.completedOrders}</div>
+                      <Progress value={(summaryData.completedOrders / summaryData.totalOrders) * 100 || 0} className="mt-2" />
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Quick Charts */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Tren Pendapatan</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={data?.revenue.daily || []}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" fontSize={12} />
+                        <YAxis fontSize={12} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value) || 0)} />
+                        <Area type="monotone" dataKey="amount" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
-                </div>
-                <div className="p-3 bg-green-100 rounded-xl">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                </CardContent>
+              </Card>
 
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total Order</p>
-                  <p className="text-2xl font-bold mt-1">{orders.total}</p>
-                  <div className={`flex items-center gap-1 text-sm mt-1 ${orders.isPositive ? "text-green-600" : "text-red-600"}`}>
-                    {orders.isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                    <span>{orders.change}%</span>
-                    <span className="text-gray-400">vs periode lalu</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-xl">
-                  <ShoppingBag className="h-6 w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total Pelanggan</p>
-                  <p className="text-2xl font-bold mt-1">{customers.total}</p>
-                  <div className="flex items-center gap-1 text-sm mt-1 text-green-600">
-                    <ArrowUpRight className="h-4 w-4" />
-                    <span>+{customers.new} baru</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-xl">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Rata-rata Order</p>
-                  <p className="text-2xl font-bold mt-1">
-                    {formatCurrency(orders.total > 0 ? revenue.total / orders.total : 0)}
-                  </p>
-                  <div className="flex items-center gap-1 text-sm mt-1 text-gray-400">
-                    <span>per transaksi</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-amber-100 rounded-xl">
-                  <TrendingUp className="h-6 w-6 text-amber-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </motion.div>
-
-      {/* Charts Row */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3, ease: easeOut }}
-        >
-          <Card className="h-full">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-gray-500" />
-                    Pendapatan Harian
-                  </CardTitle>
-                  <CardDescription>Tren pendapatan 7 hari terakhir</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {revenue.daily.length > 0 ? (
-                <div className="flex items-end justify-between gap-2 h-48">
-                  {revenue.daily.map((item, index) => (
-                    <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                      <motion.div
-                        className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-md cursor-pointer hover:from-blue-600 hover:to-blue-500 transition-colors relative group"
-                        initial={{ height: 0 }}
-                        animate={{ height: maxRevenue > 0 ? `${(item.amount / maxRevenue) * 100}%` : "4px" }}
-                        transition={{ duration: 0.8, delay: 0.4 + index * 0.1, ease: easeOut }}
-                        style={{ minHeight: item.amount > 0 ? "8px" : "4px" }}
-                      >
-                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                          {formatCurrency(item.amount)}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Layanan Terpopuler</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {(data?.services || []).slice(0, 5).map((service, index) => (
+                      <div key={service.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-sm font-medium">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{service.name}</p>
+                            <p className="text-xs text-muted-foreground">{service.orders} order</p>
+                          </div>
                         </div>
-                      </motion.div>
-                      <span className="text-xs text-gray-500">{item.day}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-48 text-gray-400">
-                  Belum ada data pendapatan
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Order Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4, ease: easeOut }}
-        >
-          <Card className="h-full">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieChart className="h-5 w-5 text-gray-500" />
-                    Status Order
-                  </CardTitle>
-                  <CardDescription>Distribusi status order saat ini</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-8">
-                {/* Donut Chart */}
-                <div className="relative w-32 h-32 flex-shrink-0">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                    {orders.byStatus.map((status, index) => {
-                      const previousPercentages = orders.byStatus
-                        .slice(0, index)
-                        .reduce((sum, s) => sum + s.percentage, 0);
-                      const circumference = 2 * Math.PI * 40;
-                      const strokeDasharray = (status.percentage / 100) * circumference;
-                      const strokeDashoffset = -(previousPercentages / 100) * circumference;
-                      
-                      return (
-                        <motion.circle
-                          key={status.status}
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          className={status.color.replace("bg-", "text-")}
-                          initial={{ strokeDasharray: 0 }}
-                          animate={{ strokeDasharray: `${strokeDasharray} ${circumference}` }}
-                          transition={{ duration: 1, delay: 0.5 + index * 0.1, ease: easeOut }}
-                          style={{ strokeDashoffset }}
-                        />
-                      );
-                    })}
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold">{orders.total}</p>
-                      <p className="text-xs text-gray-500">Order</p>
-                    </div>
+                        <p className="font-semibold">{formatCurrency(service.revenue)}</p>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
-                {/* Legend */}
-                <div className="flex-1 space-y-3">
-                  {orders.byStatus.map((status) => (
-                    <div key={status.status} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${status.color}`} />
-                        <span className="text-sm">{status.status}</span>
-                      </div>
-                      <div className="text-sm font-medium">
-                        {status.count} ({status.percentage}%)
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Services & Customers */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Top Services */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.5, ease: easeOut }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-gray-500" />
-                Layanan Terpopuler
-              </CardTitle>
-              <CardDescription>Berdasarkan jumlah order</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {services.length > 0 ? (
-                services.map((service, index) => (
-                  <motion.div
-                    key={service.name}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.6 + index * 0.1, ease: easeOut }}
-                    className="space-y-2"
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium truncate max-w-[200px]">{service.name}</span>
-                      <span className="text-gray-500">{service.orders} order</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Progress value={service.percentage} className="flex-1 h-2" />
-                      <span className="text-sm font-medium w-20 text-right">
-                        {formatCurrency(service.revenue)}
-                      </span>
-                    </div>
-                  </motion.div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-gray-400">
-                  Belum ada data layanan
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Top Customers */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6, ease: easeOut }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-500" />
-                Pelanggan Teratas
-              </CardTitle>
-              <CardDescription>Berdasarkan total belanja</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {customers.topCustomers.length > 0 ? (
-                customers.topCustomers.map((customer, index) => (
-                  <motion.div
-                    key={customer.name}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.7 + index * 0.1, ease: easeOut }}
-                    className="flex items-center gap-4"
-                  >
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white font-medium text-sm">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{customer.name}</p>
-                      <p className="text-sm text-gray-500">{customer.orders} order</p>
-                    </div>
-                    <p className="font-semibold text-green-600">
-                      {formatCurrency(customer.spent)}
-                    </p>
-                  </motion.div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-gray-400">
-                  Belum ada data pelanggan
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Branch Comparison - Owner only */}
-      {branches.length > 0 && (
-        <PermissionGuard allowedRoles={["owner"]}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.7, ease: easeOut }}
-          >
+          {/* Tab 2: Transaksi */}
+          <TabsContent value="transaksi" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-gray-500" />
-                  Perbandingan Cabang
-                </CardTitle>
-                <CardDescription>Performa antar cabang periode ini</CardDescription>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Daftar Transaksi</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="Cari order..." className="pl-8 w-[200px]" />
+                    </div>
+                    <Button variant="outline" size="sm">
+                      <Filter className="w-4 h-4 mr-2" />
+                      Filter
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-3 gap-6">
-                  {branches.map((branch, index) => (
-                    <motion.div
-                      key={branch.name}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.4, delay: 0.8 + index * 0.1, ease: easeOut }}
-                      className="p-4 rounded-xl bg-gray-50 space-y-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-semibold">{branch.name}</h4>
-                        <Badge variant="outline">{branch.percentage}%</Badge>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Pendapatan</span>
-                          <span className="font-medium">{formatCurrency(branch.revenue)}</span>
+                <div className="space-y-2">
+                  {data?.orders.byStatus && data.orders.byStatus.length > 0 ? (
+                    data.orders.byStatus.slice(0, 10).map((statusItem) => (
+                      <div key={statusItem.status} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium capitalize">{statusItem.status}</p>
+                          <p className="text-sm text-muted-foreground">{statusItem.percentage}% dari total</p>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Total Order</span>
-                          <span className="font-medium">{branch.orders}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Rata-rata/Order</span>
-                          <span className="font-medium">
-                            {formatCurrency(branch.orders > 0 ? branch.revenue / branch.orders : 0)}
-                          </span>
+                        <div className="text-right">
+                          <p className="font-semibold">{statusItem.count} order</p>
+                          <div className="w-20 h-2 bg-muted rounded-full mt-1">
+                            <div 
+                              className="h-full rounded-full" 
+                              style={{ width: `${statusItem.percentage}%`, backgroundColor: statusItem.color }}
+                            />
+                          </div>
                         </div>
                       </div>
-                      <Progress value={branch.percentage} className="h-2" />
-                    </motion.div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">Tidak ada transaksi</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
-        </PermissionGuard>
-      )}
-    </div>
+          </TabsContent>
+
+          {/* Tab 3: Pajak */}
+          <TabsContent value="pajak" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Laporan Pajak
+                </CardTitle>
+                <CardDescription>Kelola pengaturan dan laporan pajak bisnis Anda</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Tax Settings */}
+                <div className="space-y-4">
+                  {/* PPN Setting */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Pajak Pertambahan Nilai (PPN)</p>
+                        <p className="text-sm text-muted-foreground">Default: 11%</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        className="w-20 text-right"
+                        value={taxSettings.ppn.rate}
+                        onChange={(e) => setTaxSettings({ ...taxSettings, ppn: { ...taxSettings.ppn, rate: Number(e.target.value) } })}
+                        disabled={!taxSettings.ppn.enabled}
+                      />
+                      <span className="text-lg font-bold">%</span>
+                      <Switch checked={taxSettings.ppn.enabled} onCheckedChange={(checked) => setTaxSettings({ ...taxSettings, ppn: { ...taxSettings.ppn, enabled: checked } })} />
+                    </div>
+                  </div>
+
+                  {/* PPH Setting */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Pajak Penghasilan (PPH)</p>
+                        <p className="text-sm text-muted-foreground">Default: 2%</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        className="w-20 text-right"
+                        value={taxSettings.pph.rate}
+                        onChange={(e) => setTaxSettings({ ...taxSettings, pph: { ...taxSettings.pph, rate: Number(e.target.value) } })}
+                        disabled={!taxSettings.pph.enabled}
+                      />
+                      <span className="text-lg font-bold">%</span>
+                      <Switch checked={taxSettings.pph.enabled} onCheckedChange={(checked) => setTaxSettings({ ...taxSettings, pph: { ...taxSettings.pph, enabled: checked } })} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tax Summary */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Total Pendapatan Kotor</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold">{formatCurrency(summaryData.totalRevenue)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">PPN ({taxSettings.ppn.rate}%)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold">{formatCurrency(taxSettings.ppn.enabled ? summaryData.totalRevenue * (taxSettings.ppn.rate / 100) : 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">PPH ({taxSettings.pph.rate}%)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold">{formatCurrency(taxSettings.pph.enabled ? summaryData.totalRevenue * (taxSettings.pph.rate / 100) : 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Pendapatan Bersih</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatCurrency(
+                          summaryData.totalRevenue - 
+                          (taxSettings.ppn.enabled ? summaryData.totalRevenue * (taxSettings.ppn.rate / 100) : 0) -
+                          (taxSettings.pph.enabled ? summaryData.totalRevenue * (taxSettings.pph.rate / 100) : 0)
+                        )}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Tax Report Table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Rincian per Bulan</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="text-left p-3 text-sm font-medium">Bulan</th>
+                            <th className="text-right p-3 text-sm font-medium">Pendapatan</th>
+                            <th className="text-right p-3 text-sm font-medium">PPN</th>
+                            <th className="text-right p-3 text-sm font-medium">PPH</th>
+                            <th className="text-right p-3 text-sm font-medium">Bersih</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map((month, i) => {
+                            const revenue = summaryData.totalRevenue / 6;
+                            const ppn = taxSettings.ppn.enabled ? revenue * (taxSettings.ppn.rate / 100) : 0;
+                            const pph = taxSettings.pph.enabled ? revenue * (taxSettings.pph.rate / 100) : 0;
+                            return (
+                              <tr key={month} className="border-t">
+                                <td className="p-3">{month} 2026</td>
+                                <td className="p-3 text-right">{formatCurrency(revenue)}</td>
+                                <td className="p-3 text-right">{formatCurrency(ppn)}</td>
+                                <td className="p-3 text-right">{formatCurrency(pph)}</td>
+                                <td className="p-3 text-right font-medium">{formatCurrency(revenue - ppn - pph)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline">
+                    <Printer className="w-4 h-4 mr-2" />
+                    Cetak Laporan
+                  </Button>
+                  <Button>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download PDF
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab 4: Analytics */}
+          <TabsContent value="analytics" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Revenue Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tren Pendapatan</CardTitle>
+                  <CardDescription>Perkembangan pendapatan per periode</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={data?.revenue.daily || []}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" fontSize={12} />
+                        <YAxis fontSize={12} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value) || 0)} />
+                        <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Orders Status Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Status Order</CardTitle>
+                  <CardDescription>Jumlah order berdasarkan status</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data?.orders.byStatus || []}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="status" fontSize={12} />
+                        <YAxis fontSize={12} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Services */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Layanan Teratas</CardTitle>
+                  <CardDescription>Layanan dengan pendapatan tertinggi</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={(data?.services || []).slice(0, 5)} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" fontSize={12} />
+                        <YAxis dataKey="name" type="category" fontSize={12} width={100} />
+                        <Tooltip formatter={(value) => formatCurrency(Number(value) || 0)} />
+                        <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Customers */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pelanggan Teratas</CardTitle>
+                  <CardDescription>Pelanggan dengan transaksi tertinggi</CardDescription>
+                </CardHeader>
+                  <CardContent>
+                  <div className="space-y-4">
+                    {(data?.customers.topCustomers || []).slice(0, 5).map((customer, index) => (
+                      <div key={`${customer.name}-${index}`} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="font-medium">{customer.name}</p>
+                            <p className="text-xs text-muted-foreground">{customer.orders} order</p>
+                          </div>
+                        </div>
+                        <p className="font-semibold text-green-600">{formatCurrency(customer.spent)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </PermissionGuard>
   );
 }

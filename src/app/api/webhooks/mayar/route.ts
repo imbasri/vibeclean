@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, orders, orderStatusHistory, subscriptions, subscriptionInvoices, organizations } from "@/lib/db";
+import { db, orders, orderStatusHistory, subscriptions, subscriptionInvoices, organizations, organizationBalances, balanceTransactions, branches } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { verifyWebhookSignature, parseWebhookPayload } from "@/lib/mayar";
 import { calculateTransactionFee, getTransactionFeeSettings } from "@/lib/config/platform";
@@ -235,11 +235,21 @@ async function updateOrderToPaid(
   // Calculate transaction fee for VibeClean founder
   const feeSettings = await getTransactionFeeSettings();
   const transactionFee = calculateTransactionFee(grossAmount, feeSettings);
+  const netAmountForOwner = grossAmount - transactionFee;
 
   console.log(`[Mayar Webhook] Transaction fee for order ${order.orderNumber}: Rp ${transactionFee} (type: ${feeSettings.feeType}, value: ${feeSettings.feeValue}%)`);
 
-  // Update order
+  // Get branch to find organization
+  const [branch] = await db
+    .select()
+    .from(branches)
+    .where(eq(branches.id, order.branchId));
+
+  const organizationId = branch?.organizationId;
+
+  // Update order, add status history, and update organization balance
   await db.transaction(async (tx) => {
+    // 1. Update order to paid
     await tx
       .update(orders)
       .set({
@@ -252,8 +262,7 @@ async function updateOrderToPaid(
       })
       .where(eq(orders.id, order.id));
 
-    // Add status history (using system user ID or null)
-    // Note: We use the order creator as fallback since webhook doesn't have user context
+    // 2. Add status history
     await tx.insert(orderStatusHistory).values({
       orderId: order.id,
       fromStatus: order.status,
@@ -261,6 +270,61 @@ async function updateOrderToPaid(
       changedBy: order.createdBy, // Use order creator as system fallback
       notes: `Pembayaran diterima via ${data.paymentMethod || "Mayar"} - Rp ${nettAmount.toLocaleString("id-ID")} (fee: Rp ${transactionFee})`,
     });
+
+    // 3. Update organization balance (if we have the organization)
+    if (organizationId) {
+      // Get or create balance record
+      let [balance] = await tx
+        .select()
+        .from(organizationBalances)
+        .where(eq(organizationBalances.organizationId, organizationId));
+
+      if (!balance) {
+        // Create balance record if doesn't exist
+        const [newBalance] = await tx.insert(organizationBalances).values({
+          organizationId,
+          totalEarnings: "0",
+          availableBalance: "0",
+          pendingBalance: "0",
+          totalWithdrawn: "0",
+        }).returning();
+        balance = newBalance;
+      }
+
+      // Calculate new balances
+      const currentTotalEarnings = parseFloat(balance.totalEarnings || "0");
+      const currentAvailable = parseFloat(balance.availableBalance || "0");
+
+      const newTotalEarnings = currentTotalEarnings + grossAmount;
+      const newAvailableBalance = currentAvailable + netAmountForOwner;
+
+      // Update balance
+      await tx
+        .update(organizationBalances)
+        .set({
+          totalEarnings: String(newTotalEarnings),
+          availableBalance: String(newAvailableBalance),
+          lastTransactionAt: paidAt,
+          updatedAt: paidAt,
+        })
+        .where(eq(organizationBalances.organizationId, organizationId));
+
+      // 4. Record balance transaction
+      await tx.insert(balanceTransactions).values({
+        organizationId,
+        orderId: order.id,
+        type: "payment_received",
+        status: "completed",
+        amount: String(grossAmount),
+        feeAmount: String(transactionFee),
+        netAmount: String(netAmountForOwner),
+        description: `Pembayaran order ${order.orderNumber}`,
+        referenceId: data.transactionId,
+        completedAt: paidAt,
+      });
+
+      console.log(`[Mayar Webhook] Balance updated for org ${organizationId}: +Rp ${netAmountForOwner} (gross: Rp ${grossAmount}, fee: Rp ${transactionFee})`);
+    }
   });
 
   console.log(`[Mayar Webhook] Order ${order.orderNumber} marked as PAID with transaction fee Rp ${transactionFee}`);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, type Variants, type Easing } from "framer-motion";
 import {
   CreditCard,
@@ -17,6 +18,9 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
+  Wallet,
+  RefreshCw,
+  CheckCircle2,
 } from "lucide-react";
 import { gooeyToast } from "goey-toast";
 
@@ -158,12 +162,104 @@ const plans: {
   },
 ];
 
-export default function BillingPage() {
+function BillingContent() {
   const { data, isLoading, error, refetch, subscribeToPlan, isSubscribing } = useBilling();
+  const searchParams = useSearchParams();
+  const [mounted, setMounted] = useState(false);
+
+  // All hooks must be called before any early returns
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Check for payment success - must be called unconditionally
+  useEffect(() => {
+    if (!mounted) return;
+    const success = searchParams.get("success");
+    if (success === "true") {
+      gooeyToast.success("Pembayaran Berhasil", { description: "Terima kasih atas pembayaran Anda!" });
+      refetch();
+      window.history.replaceState({}, "", "/dashboard/billing");
+    }
+  }, [searchParams, refetch, mounted]);
+
+  // Auto-check for paid invoices with inactive subscription on mount
+  useEffect(() => {
+    if (!mounted || !data?.invoices || !data?.subscription) return;
+    const paidInvoices = data.invoices.filter(inv => inv.status === "paid");
+    const hasInactiveSubscription = data.subscription.status !== "active" && data.subscription.status !== "trial";
+
+    if (paidInvoices.length > 0 && hasInactiveSubscription) {
+      gooeyToast.warning("Subscription Belum Aktif", {
+        description: "Klik tombol refresh pada invoice yang sudah lunas untuk aktivasi",
+        duration: 8000,
+      });
+    }
+  }, [data, mounted]);
+
   const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [invoiceToPay, setInvoiceToPay] = useState<{id: string, amount: number, plan: string} | null>(null);
+
+  // Early return after all hooks
+  if (!mounted) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Memuat...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Function to check payment status manually
+  const checkPaymentStatus = async (invoiceId: string) => {
+    try {
+      const response = await fetch(`/api/billing/invoice/${invoiceId}/check-payment`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        if (result.paid) {
+          gooeyToast.success("Pembayaran Dikonfirmasi!", { description: `Invoice ${result.invoiceNumber} telah lunas.` });
+        } else {
+          gooeyToast.info("Menunggu Pembayaran", { description: result.message || "Status masih pending." });
+        }
+        refetch();
+      } else {
+        gooeyToast.error("Gagal", { description: result.error || "Tidak dapat memeriksa pembayaran" });
+      }
+    } catch (err) {
+      gooeyToast.error("Error", { description: "Terjadi kesalahan saat memeriksa pembayaran" });
+    }
+  };
+
+  // Manual activate subscription (for when payment was made outside system)
+
+  // Only manual refresh - no auto-refresh to avoid blinking
+  // User can manually click refresh button
+
+  const handlePayInvoice = async (invoiceId: string) => {
+    try {
+      const response = await fetch(`/api/billing/invoice/${invoiceId}/payment-link`, {
+        method: "GET",
+      });
+      const result = await response.json();
+      
+      if (result.success && result.paymentUrl) {
+        // Open payment in same tab and wait for redirect back
+        window.location.href = result.paymentUrl;
+      } else {
+        gooeyToast.error("Gagal", { description: result.error || "Tidak dapat membuat link pembayaran" });
+      }
+    } catch (err) {
+      gooeyToast.error("Error", { description: "Terjadi kesalahan saat membuat link pembayaran" });
+    }
+  };
 
   const handleUpgrade = (planId: SubscriptionPlan) => {
     setSelectedPlan(planId);
@@ -172,31 +268,81 @@ export default function BillingPage() {
 
   const confirmUpgrade = async () => {
     if (!selectedPlan) return;
-    
+
     const result = await subscribeToPlan(selectedPlan, "monthly");
-    
+
     if (result.success) {
       if (result.requiresPayment && result.paymentUrl) {
         // Open payment URL in new tab or show payment dialog
         setPaymentUrl(result.paymentUrl);
         setPaymentDialogOpen(true);
-        gooeyToast.success("Invoice Dibuat", { 
-          description: `Silakan lakukan pembayaran untuk aktivasi paket.` 
+        gooeyToast.success("Invoice Dibuat", {
+          description: `Silakan lakukan pembayaran untuk aktivasi paket.`
         });
       } else {
         // Free plan activated
         const plan = plans.find((p) => p.id === selectedPlan);
-        gooeyToast.success("Paket Diaktifkan", { 
-          description: result.message || `Anda telah beralih ke paket ${plan?.name}!` 
+        gooeyToast.success("Paket Diaktifkan", {
+          description: result.message || `Anda telah beralih ke paket ${plan?.name}!`
         });
       }
     } else {
-      gooeyToast.error("Gagal Upgrade", { 
-        description: result.error || "Terjadi kesalahan saat upgrade" 
+      gooeyToast.error("Gagal Upgrade", {
+        description: result.error || "Terjadi kesalahan saat upgrade"
       });
     }
-    
+
     setIsUpgradeDialogOpen(false);
+  };
+
+  // Sync subscription status for paid invoices
+  const syncSubscriptionStatus = async (invoiceId: string) => {
+    try {
+      const response = await fetch(`/api/billing/invoice/${invoiceId}/manual-activate`, {
+        method: "POST",
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        gooeyToast.success("Subscription Disinkronkan!", {
+          description: "Status subscription telah diperbarui",
+        });
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        gooeyToast.error("Gagal Sync", {
+          description: result.error || "Subscription sudah aktif",
+        });
+      }
+    } catch (error) {
+      gooeyToast.error("Error", {
+        description: "Gagal menyinkronkan status subscription",
+      });
+    }
+  };
+
+  // Force activate subscription for paid invoices
+  const handleForceActivate = async (invoiceId: string) => {
+    try {
+      const response = await fetch(`/api/billing/invoice/${invoiceId}/force-activate`, {
+        method: "POST",
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        gooeyToast.success(result.message || "Paket Pro berhasil diaktifkan!", {
+          description: "Silakan refresh halaman untuk melihat perubahan",
+        });
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        gooeyToast.error("Gagal Activate", {
+          description: result.error || "Invoice belum lunas atau error",
+        });
+      }
+    } catch (error) {
+      gooeyToast.error("Error", {
+        description: "Gagal mengaktifkan subscription",
+      });
+    }
   };
 
   // Loading state
@@ -258,13 +404,13 @@ export default function BillingPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge className="bg-green-100 text-foreground">Aktif</Badge>;
+        return <Badge variant="secondary" className="text-green-700 dark:text-green-400">Aktif</Badge>;
       case "trial":
-        return <Badge className="bg-blue-100 text-primary">Trial</Badge>;
+        return <Badge variant="secondary" className="text-blue-700 dark:text-blue-400">Trial</Badge>;
       case "expired":
-        return <Badge className="bg-red-100 text-destructive">Expired</Badge>;
+        return <Badge variant="destructive">Expired</Badge>;
       case "cancelled":
-        return <Badge className="bg-muted text-foreground">Dibatalkan</Badge>;
+        return <Badge variant="outline">Dibatalkan</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -312,7 +458,9 @@ export default function BillingPage() {
                   </CardDescription>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold">{formatCurrency(subscription.price)}</p>
+                  <p className="text-3xl font-bold">
+                    {currentPlan === "starter" ? "GRATIS" : formatCurrency(currentPlanData.price)}
+                  </p>
                   <p className="text-sm text-muted-foreground">/bulan</p>
                 </div>
               </div>
@@ -498,19 +646,30 @@ export default function BillingPage() {
           </div>
         </motion.div>
 
-        {/* Invoice History */}
+{/* Invoice History */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5, ease: easeOut }}
         >
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
                 <CardTitle className="flex items-center gap-2">
-                 <Receipt className="h-5 w-5 text-muted-foreground" />
-                 Riwayat Invoice
-               </CardTitle>
-               <CardDescription className="text-muted-foreground">Daftar invoice dan pembayaran</CardDescription>
+                  <Receipt className="h-5 w-5 text-muted-foreground" />
+                  Riwayat Invoice
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">Daftar invoice dan pembayaran</CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => refetch()}
+                disabled={isLoading}
+              >
+                <Loader2 className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
             </CardHeader>
             <CardContent>
               {invoices.length > 0 ? (
@@ -525,12 +684,12 @@ export default function BillingPage() {
                       <TableHead className="w-[100px]"></TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+<TableBody>
                     {invoices.map((invoice) => (
                       <TableRow key={invoice.id}>
-                        <TableCell className="font-medium">{invoice.id}</TableCell>
+                        <TableCell className="font-medium">{invoice.invoiceNumber || invoice.id}</TableCell>
                         <TableCell>{formatDate(new Date(invoice.date))}</TableCell>
-                        <TableCell>{invoice.plan}</TableCell>
+                        <TableCell className="capitalize">{invoice.plan}</TableCell>
                         <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
                         <TableCell className="text-center">
                           {invoice.status === "paid" && (
@@ -544,13 +703,61 @@ export default function BillingPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => gooeyToast.success("Download", { description: "Invoice sedang diunduh..." })}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {invoice.status === "pending" && (
+                              <>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="h-7 bg-green-600 hover:bg-green-700"
+                                  onClick={() => handlePayInvoice(invoice.id)}
+                                >
+                                  <Wallet className="h-3 w-3 mr-1" />
+                                  Bayar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7"
+                                  title="Periksa Status Pembayaran"
+                                  onClick={() => checkPaymentStatus(invoice.id)}
+                                >
+                                  <Loader2 className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            {invoice.status === "paid" && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-green-600"
+                                  disabled
+                                >
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Lunas
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7"
+                                  title="Sync Status Subscription"
+                                  onClick={() => syncSubscriptionStatus(invoice.id)}
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-purple-600 border-purple-200 hover:bg-purple-50"
+                                  title="Force Activate Pro Plan"
+                                  onClick={() => handleForceActivate(invoice.id)}
+                                >
+                                  <Crown className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -701,5 +908,22 @@ export default function BillingPage() {
         </Dialog>
       </div>
     </PermissionGuard>
+  );
+}
+
+import { Suspense } from "react";
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Memuat...</p>
+        </div>
+      </div>
+    }>
+      <BillingContent />
+    </Suspense>
   );
 }

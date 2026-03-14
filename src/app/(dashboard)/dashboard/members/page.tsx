@@ -15,6 +15,7 @@ import {
   ToggleRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ const fadeIn: any = {
 };
 
 export default function MemberPackagesPage() {
+  const router = useRouter();
   const { packages, isLoading, error, createPackage, updatePackage, deletePackage, refetch } = useMemberPackages();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<MemberPackage | null>(null);
@@ -163,10 +165,16 @@ export default function MemberPackagesPage() {
             Kelola paket langganan untuk pelanggan
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="h-4 w-4 mr-2" />
-          Tambah Paket
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/dashboard/members/subscriptions")}>
+            <Users className="h-4 w-4 mr-2" />
+            Subscriptions
+          </Button>
+          <Button onClick={openCreateDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Tambah Paket
+          </Button>
+        </div>
       </div>
 
       {error && (

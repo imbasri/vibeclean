@@ -91,12 +91,12 @@ const itemVariants: Variants = {
 
 // Category display config
 const categoryConfig: Record<ServiceCategory, { label: string; color: string }> = {
-  cuci: { label: "Cuci", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
-  setrika: { label: "Setrika", color: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" },
-  cuci_setrika: { label: "Cuci + Setrika", color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
-  dry_clean: { label: "Dry Clean", color: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" },
-  express: { label: "Express", color: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" },
-  khusus: { label: "Khusus", color: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" },
+  cuci: { label: "Cuci", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" },
+  setrika: { label: "Setrika", color: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" },
+  cuci_setrika: { label: "Cuci + Setrika", color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" },
+  dry_clean: { label: "Dry Clean", color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" },
+  express: { label: "Express", color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
+  khusus: { label: "Khusus", color: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" },
 };
 
 const unitLabels: Record<ServiceUnit, string> = {
@@ -322,18 +322,20 @@ export default function ServicesPage() {
           <h1 className="text-2xl font-bold text-foreground">Layanan</h1>
           <p className="text-muted-foreground mt-1">Kelola layanan laundry di cabang ini</p>
         </div>
-        <PermissionGuard allowedRoles={["owner", "manager"]}>
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-        </PermissionGuard>
-        <PermissionGuard allowedRoles={["owner", "manager"]}>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Tambah Layanan
-          </Button>
-        </PermissionGuard>
+        <div className="flex items-center gap-2">
+          <PermissionGuard allowedRoles={["owner", "manager"]}>
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </PermissionGuard>
+          <PermissionGuard allowedRoles={["owner", "manager"]}>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Layanan
+            </Button>
+          </PermissionGuard>
+        </div>
       </motion.div>
 
       {/* Loading State */}

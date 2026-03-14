@@ -52,6 +52,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { useBranches } from "@/hooks/use-branches";
+import { useSubscriptionStore } from "@/stores/subscription-store";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 // Animation config
@@ -82,6 +83,9 @@ type BranchFormData = {
   address: string;
   phone: string;
   isActive: boolean;
+  qrColorDark?: string;
+  qrColorLight?: string;
+  qrLogoUrl?: string;
 };
 
 const initialFormData: BranchFormData = {
@@ -89,9 +93,20 @@ const initialFormData: BranchFormData = {
   address: "",
   phone: "",
   isActive: true,
+  qrColorDark: "#000000",
+  qrColorLight: "#FFFFFF",
+  qrLogoUrl: "",
 };
 
 export default function BranchesPage() {
+  // Subscription check
+  const { plan, status, canAccessFeature, fetchSubscription } = useSubscriptionStore();
+  
+  // Check Pro access on mount
+  useEffect(() => {
+    fetchSubscription();
+  }, []);
+  
   // Use the branches hook with stats
   const {
     branches,
@@ -101,6 +116,9 @@ export default function BranchesPage() {
     createBranch,
     updateBranch,
   } = useBranches({ includeStats: true });
+  
+  // Check if user has Pro plan
+  const hasProAccess = plan === 'pro' || plan === 'enterprise' || status === 'active';
 
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -155,7 +173,15 @@ export default function BranchesPage() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal menambahkan cabang";
-      gooeyToast.error("Gagal", { description: message });
+      
+      // Check for branch limit error
+      if (message.includes("Limit cabang tercapai")) {
+        gooeyToast.error("Limit Tercapai", { 
+          description: "Paket Starter hanya untuk 1 cabang. Upgrade ke Pro untuk tambah cabang." 
+        });
+      } else {
+        gooeyToast.error("Gagal", { description: message });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -174,6 +200,8 @@ export default function BranchesPage() {
         address: formData.address,
         phone: formData.phone,
         isActive: formData.isActive,
+        qrColorDark: formData.qrColorDark,
+        qrColorLight: formData.qrColorLight,
       });
 
       if (updatedBranch) {
@@ -210,6 +238,8 @@ export default function BranchesPage() {
       address: branch.address,
       phone: branch.phone,
       isActive: branch.isActive,
+      qrColorDark: branch.qrColorDark || "#000000",
+      qrColorLight: branch.qrColorLight || "#FFFFFF",
     });
     setIsEditDialogOpen(true);
   };
@@ -298,11 +328,27 @@ export default function BranchesPage() {
         <Building2 className="h-16 w-16 text-gray-300 mb-4" />
         <h2 className="text-xl font-semibold text-gray-900">Akses Terbatas</h2>
         <p className="text-gray-500 mt-2 max-w-md">
-          Hanya owner yang dapat mengakses manajemen cabang. 
+          Hanya owner yang dapat mengakses manajemen cabang.
           Hubungi owner untuk informasi lebih lanjut.
         </p>
       </div>
     }>
+      {/* Pro Plan Check */}
+      {!hasProAccess && (
+        <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <Building2 className="h-16 w-16 text-amber-300 mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900">Upgrade ke Paket Pro</h2>
+          <p className="text-gray-500 mt-2 max-w-md">
+            Fitur manajemen cabang hanya tersedia untuk paket Pro dan Enterprise.
+            Silakan upgrade untuk mengakses fitur ini.
+          </p>
+          <Button className="mt-4" onClick={() => window.location.href = '/dashboard/billing'}>
+            Upgrade Sekarang
+          </Button>
+        </div>
+      )}
+      
+      {hasProAccess && (
       <div className="p-6 space-y-6">
         {/* Header */}
         <motion.div
@@ -315,10 +361,21 @@ export default function BranchesPage() {
             <h1 className="text-2xl font-bold text-gray-900">Manajemen Cabang</h1>
             <p className="text-gray-500 mt-1">Kelola semua cabang laundry Anda</p>
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Tambah Cabang
-          </Button>
+          {totalBranches >= 1 ? (
+            <Button 
+              onClick={() => gooeyToast.info("Limit Tercapai", { description: "Paket Starter hanya untuk 1 cabang. Upgrade ke Pro untuk tambah cabang lain." })} 
+              variant="outline"
+              disabled
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Cabang ({totalBranches}/1)
+            </Button>
+          ) : (
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Cabang
+            </Button>
+          )}
         </motion.div>
 
         {/* Stats Cards */}
@@ -329,31 +386,15 @@ export default function BranchesPage() {
           className="grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           <motion.div variants={itemVariants}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Building2 className="h-5 w-5 text-blue-600" />
+            <Card className="border-l-4 border-l-blue-500">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg shrink-0">
+                    <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{totalBranches}</p>
-                    <p className="text-sm text-gray-500">Total Cabang</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <ToggleRight className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{activeBranches}</p>
-                    <p className="text-sm text-gray-500">Cabang Aktif</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] sm:text-[11px] font-semibold uppercase leading-tight text-muted-foreground">Total Cabang</p>
+                    <p className="text-lg sm:text-2xl font-bold text-foreground">{totalBranches}</p>
                   </div>
                 </div>
               </CardContent>
@@ -361,15 +402,15 @@ export default function BranchesPage() {
           </motion.div>
 
           <motion.div variants={itemVariants}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-purple-600" />
+            <Card className="border-l-4 border-l-green-500">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-green-50 dark:bg-green-900/20 rounded-lg shrink-0">
+                    <ToggleRight className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400" />
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
-                    <p className="text-sm text-gray-500">Total Pendapatan</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] sm:text-[11px] font-semibold uppercase leading-tight text-muted-foreground">Cabang Aktif</p>
+                    <p className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400">{activeBranches}</p>
                   </div>
                 </div>
               </CardContent>
@@ -377,15 +418,31 @@ export default function BranchesPage() {
           </motion.div>
 
           <motion.div variants={itemVariants}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-100 rounded-lg">
-                    <ShoppingBag className="h-5 w-5 text-amber-600" />
+            <Card className="border-l-4 border-l-purple-500">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg shrink-0">
+                    <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{totalOrders}</p>
-                    <p className="text-sm text-gray-500">Total Order</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] sm:text-[11px] font-semibold uppercase leading-tight text-muted-foreground">Pendapatan</p>
+                    <p className="text-lg sm:text-2xl font-bold text-purple-600 dark:text-purple-400 truncate">{formatCurrency(totalRevenue)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={itemVariants}>
+            <Card className="border-l-4 border-l-amber-500">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg shrink-0">
+                    <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] sm:text-[11px] font-semibold uppercase leading-tight text-muted-foreground">Total Order</p>
+                    <p className="text-lg sm:text-2xl font-bold text-amber-600 dark:text-amber-400">{totalOrders}</p>
                   </div>
                 </div>
               </CardContent>
@@ -415,7 +472,7 @@ export default function BranchesPage() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           <AnimatePresence mode="popLayout">
             {filteredBranches.map((branch) => (
@@ -425,15 +482,15 @@ export default function BranchesPage() {
                 layout
                 exit={{ opacity: 0, scale: 0.9 }}
               >
-                <Card className={`relative overflow-hidden transition-shadow hover:shadow-lg ${!branch.isActive ? "opacity-70" : ""}`}>
-                  {/* Status indicator */}
-                  <div className={`absolute top-0 left-0 right-0 h-1 ${branch.isActive ? "bg-green-500" : "bg-gray-300"}`} />
-                  
-                  <CardHeader className="pb-3">
+                <Card className={`relative overflow-hidden transition-shadow hover:shadow-md ${!branch.isActive ? "opacity-70" : ""}`}>
+                  <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg">{branch.name}</CardTitle>
-                        <Badge variant={branch.isActive ? "default" : "secondary"}>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${branch.isActive ? "bg-green-500" : "bg-gray-400"}`} />
+                          <CardTitle className="text-base">{branch.name}</CardTitle>
+                        </div>
+                        <Badge variant={branch.isActive ? "default" : "secondary"} className="w-fit text-xs">
                           {branch.isActive ? "Aktif" : "Nonaktif"}
                         </Badge>
                       </div>
@@ -468,7 +525,7 @@ export default function BranchesPage() {
                             <QrCode className="h-4 w-4 mr-2" />
                             QR Code Pembayaran
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditDialog(branch)}>
                             <Settings className="h-4 w-4 mr-2" />
                             Pengaturan Cabang
                           </DropdownMenuItem>
@@ -477,42 +534,42 @@ export default function BranchesPage() {
                     </div>
                   </CardHeader>
                   
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3">
                     {/* Contact Info */}
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-start gap-2 text-gray-600">
-                        <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <span className="line-clamp-2">{branch.address}</span>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex items-start gap-1.5 text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-2">{branch.address || "Alamat belum diatur"}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone className="h-4 w-4" />
-                        <span>{branch.phone}</span>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Phone className="h-3.5 w-3.5" />
+                        <span className="truncate">{branch.phone || "-"}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Calendar className="h-4 w-4" />
-                        <span>Dibuat {formatDate(branch.createdAt)}</span>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span className="truncate">Dibuat {formatDate(branch.createdAt)}</span>
                       </div>
                     </div>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-3 gap-2 pt-3 border-t">
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                       <div className="text-center">
-                        <p className="text-lg font-bold text-blue-600">
+                        <p className="text-base font-bold text-blue-600 dark:text-blue-400">
                           {branch.stats?.totalOrders || 0}
                         </p>
-                        <p className="text-xs text-gray-500">Order</p>
+                        <p className="text-[10px] text-muted-foreground">Order</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-lg font-bold text-green-600">
-                          {formatCurrency(branch.stats?.totalRevenue || 0).replace("Rp", "")}
+                        <p className="text-sm font-bold text-green-600 dark:text-green-400 truncate">
+                          {formatCurrency(branch.stats?.totalRevenue || 0)}
                         </p>
-                        <p className="text-xs text-gray-500">Pendapatan</p>
+                        <p className="text-[10px] text-muted-foreground">Pendapatan</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-lg font-bold text-purple-600">
+                        <p className="text-base font-bold text-purple-600 dark:text-purple-400">
                           {branch.stats?.staffCount || 0}
                         </p>
-                        <p className="text-xs text-gray-500">Staff</p>
+                        <p className="text-[10px] text-muted-foreground">Staff</p>
                       </div>
                     </div>
                   </CardContent>
@@ -651,7 +708,48 @@ export default function BranchesPage() {
                   onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                 />
               </div>
-            </div>
+              
+              {/* QR Code Colors */}
+              <div className="space-y-3 pt-2 border-t">
+                <Label className="text-sm font-medium">Warna QR Code</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Warna Hitam</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.qrColorDark || "#000000"}
+                        onChange={(e) => setFormData({ ...formData, qrColorDark: e.target.value })}
+                        className="h-9 w-14 rounded cursor-pointer border"
+                      />
+                      <Input
+                        value={formData.qrColorDark || "#000000"}
+                        onChange={(e) => setFormData({ ...formData, qrColorDark: e.target.value })}
+                        className="flex-1 text-xs"
+                        placeholder="#000000"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Warna Putih</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.qrColorLight || "#FFFFFF"}
+                        onChange={(e) => setFormData({ ...formData, qrColorLight: e.target.value })}
+                        className="h-9 w-14 rounded cursor-pointer border"
+                      />
+                      <Input
+                        value={formData.qrColorLight || "#FFFFFF"}
+                        onChange={(e) => setFormData({ ...formData, qrColorLight: e.target.value })}
+                        className="flex-1 text-xs"
+                        placeholder="#FFFFFF"
+                      />
+                    </div>
+                  </div>
+                </div>
+                </div>
+              </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
                 Batal
@@ -717,6 +815,15 @@ export default function BranchesPage() {
                       <span className="text-[10px] text-gray-500">400px</span>
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* QR Customization Info */}
+              {!qrCodeData && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    💡 Tip: Anda dapat menyesuaikan warna QR Code di pengaturan cabang.
+                  </p>
                 </div>
               )}
 
@@ -803,6 +910,7 @@ export default function BranchesPage() {
           </DialogContent>
         </Dialog>
       </div>
+      )}
     </PermissionGuard>
   );
 }

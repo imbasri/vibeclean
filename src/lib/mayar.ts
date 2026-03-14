@@ -300,6 +300,34 @@ export async function createOrderPayment(
   }
 }
 
+/**
+ * Get invoice details and status from Mayar
+ */
+export async function getInvoiceStatus(invoiceId: string): Promise<{
+  id: string;
+  status: string;
+  isPaid: boolean;
+  paidAt?: string;
+}> {
+  const response = await mayarFetch<{
+    id: string;
+    status: string;
+    paidAt?: string;
+  }>(`/invoice/${invoiceId}`, {
+    method: "GET",
+  });
+
+  const status = response.data.status?.toUpperCase();
+  const isPaid = status === "PAID" || status === "SUCCESS" || status === "COMPLETED";
+
+  return {
+    id: response.data.id,
+    status: response.data.status,
+    isPaid,
+    paidAt: response.data.paidAt,
+  };
+}
+
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================

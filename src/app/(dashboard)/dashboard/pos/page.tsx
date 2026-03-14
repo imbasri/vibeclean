@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useCartStore } from "@/stores";
 import {
   Plus,
   Minus,
@@ -20,12 +21,14 @@ import {
   Check,
   Percent,
   Printer,
+  CheckCircle,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/auth-context";
 import { PermissionGuard } from "@/components/common/permission-guard";
-import { openReceiptWindow } from "@/components/pos/receipt-print";
+import { openReceiptWindow, ReceiptPrint } from "@/components/pos/receipt-print";
 import { PaymentQRISDialog } from "@/components/pos/payment-qris-dialog";
+import { CustomerSearchDialog } from "@/components/pos/customer-search-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,12 +37,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { formatCurrency } from "@/lib/utils";
 import { useServices } from "@/hooks/use-services";
 import { useOrders } from "@/hooks/use-orders";
 import { gooeyToast } from "goey-toast";
+import { Badge } from "@/components/ui/badge";
 import type { LaundryService, PaymentMethod, ServiceCategory } from "@/types";
+
+// Category display config
+const categoryConfig: Record<ServiceCategory, { label: string; color: string }> = {
+  cuci: { label: "Cuci", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" },
+  setrika: { label: "Setrika", color: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" },
+  cuci_setrika: { label: "Cuci + Setrika", color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" },
+  dry_clean: { label: "Dry Clean", color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" },
+  express: { label: "Express", color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
+  khusus: { label: "Khusus", color: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" },
+};
 
 // Helper function for toast notifications
 const showToast = (
@@ -95,13 +110,18 @@ function ServiceCard({ service, onAdd }: ServiceCardProps) {
       onClick={() => onAdd(service)}
       className="flex flex-col p-4 text-left bg-white dark:bg-gray-800 border rounded-lg hover:border-blue-500 hover:shadow-md transition-all"
     >
-      <span className="font-medium text-gray-900 dark:text-white">
-        {service.name}
-      </span>
-      <span className="text-sm text-gray-500 mt-1">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <span className="font-medium text-gray-900 dark:text-white flex-1">
+          {service.name}
+        </span>
+        <Badge className={`${categoryConfig[service.category].color} text-[10px] px-1.5 py-0 h-5`}>
+          {categoryConfig[service.category].label}
+        </Badge>
+      </div>
+      <span className="text-sm text-gray-500">
         {formatCurrency(service.price)} / {service.unit}
       </span>
-      <span className="text-xs text-gray-400 mt-2">
+      <span className="text-xs text-gray-400 mt-1">
         Est. {service.estimatedDays} hari
       </span>
     </button>
@@ -256,12 +276,24 @@ export default function POSPage() {
   const customerName = watch("customerName");
   const customerPhone = watch("customerPhone");
 
-  // State
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Zustand store
+  const cartStore = useCartStore();
+  const {
+    items: cart,
+    addItem: addToCart,
+    removeItem: removeFromCart,
+    updateQuantity,
+    setDiscount,
+    applyCoupon,
+    clearCart: clearCartStore,
+    getSubtotal,
+    getDiscountAmount,
+    getTotal,
+  } = cartStore;
+
+  // Local state (non-cart)
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<ServiceCategory | "all">("all");
-  const [discount, setDiscount] = useState(0);
-  const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
@@ -301,6 +333,10 @@ export default function POSPage() {
     customerName: string;
   } | null>(null);
   
+  // Receipt Print Dialog state
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [receiptData, setReceiptData] = useState<any>(null);
+  
   const [foundCustomer, setFoundCustomer] = useState<{
     id: string;
     name: string;
@@ -308,6 +344,30 @@ export default function POSPage() {
     totalSpent: string;
   } | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  
+  // Inline customer search
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // Customer search dialog
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+
+  // Member package state
+  const [memberStatus, setMemberStatus] = useState<{
+    eligible: boolean;
+    subscriptionId?: string;
+    packageName?: string;
+    discountType?: "percentage" | "fixed";
+    discountValue?: number;
+    remainingTransactions?: number | null;
+    maxWeightKg?: number | null;
+    message?: string;
+  } | null>(null);
+  const [isCheckingMember, setIsCheckingMember] = useState(false);
+
+  // Save as regular customer
+  const [saveAsCustomer, setSaveAsCustomer] = useState(true);
 
   // Customer auto-lookup by phone
   useEffect(() => {
@@ -343,6 +403,91 @@ export default function POSPage() {
     return () => clearTimeout(timeoutId);
   }, [customerPhone, reset]);
 
+  // Check member package status when customer is found
+  const checkMemberStatus = useCallback(async (customerId: string, weight: number = 0) => {
+    if (!customerId || !activeBranch?.id) return;
+    
+    setIsCheckingMember(true);
+    try {
+      const response = await fetch("/api/member-packages/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          branchId: activeBranch.id,
+          weight,
+        }),
+      });
+      const data = await response.json();
+      setMemberStatus(data);
+    } catch (error) {
+      console.error("Member check error:", error);
+      setMemberStatus(null);
+    } finally {
+      setIsCheckingMember(false);
+    }
+  }, [activeBranch?.id]);
+
+  // Reset member status when customer is cleared
+  useEffect(() => {
+    if (!foundCustomer) {
+      setMemberStatus(null);
+    } else if (foundCustomer.id) {
+      checkMemberStatus(foundCustomer.id);
+    }
+  }, [foundCustomer, checkMemberStatus]);
+
+  // Listen for receipt print event
+  useEffect(() => {
+    const handleOpenReceipt = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      setReceiptData(customEvent.detail);
+      setShowReceiptDialog(true);
+    };
+
+    window.addEventListener("open-receipt-print", handleOpenReceipt);
+    return () => window.removeEventListener("open-receipt-print", handleOpenReceipt);
+  }, []);
+
+  // Inline customer search - debounced
+  useEffect(() => {
+    if (!customerName || customerName.length < 2) {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(`/api/customers/search?q=${encodeURIComponent(customerName)}`);
+        const data = await response.json();
+        setSearchResults(data.customers || []);
+        setShowSearchDropdown(true);
+      } catch (error) {
+        console.error("Search error:", error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [customerName]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.customer-search-container')) {
+        setShowSearchDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Filter services from API
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
@@ -354,12 +499,10 @@ export default function POSPage() {
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.service.price * item.quantity, 0);
-  const manualDiscountAmount = discountType === "percentage" 
-    ? (subtotal * discount) / 100 
-    : discount;
-  const couponDiscountAmount = appliedCoupon?.discount || 0;
-  const totalDiscount = manualDiscountAmount + couponDiscountAmount;
-  const total = Math.max(0, subtotal - totalDiscount);
+  
+  // Get discount from store (includes both manual and coupon discounts)
+  const discountAmount = getDiscountAmount();
+  const total = Math.max(0, subtotal - discountAmount);
 
   // Apply coupon handler
   const handleApplyCoupon = async () => {
@@ -391,6 +534,9 @@ export default function POSPage() {
         value: data.coupon.value,
         discount: data.discount,
       });
+      
+      // Update cart store with coupon discount
+      setDiscount(data.coupon.value, data.coupon.type);
     } catch (err) {
       setCouponError("Gagal menerapkan kupon");
     } finally {
@@ -403,43 +549,44 @@ export default function POSPage() {
     setAppliedCoupon(null);
     setCouponCode("");
     setCouponError(null);
+    // Clear discount from cart store
+    setDiscount(0, "percentage");
   };
 
-  // Cart handlers
-  const addToCart = (service: LaundryService) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.service.id === service.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.service.id === service.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-      return [...prev, { service, quantity: 1 }];
+  // Select customer from inline search
+  const handleSelectCustomer = (customer: any) => {
+    reset((prev) => ({
+      ...prev,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+    }));
+    setShowSearchDropdown(false);
+    setSearchResults([]);
+    gooeyToast.success("Pelanggan dipilih", {
+      description: `${customer.name} (${customer.phone})`,
     });
   };
 
-  const updateQuantity = (serviceId: string, quantity: number) => {
+  // Cart handlers (using Zustand store)
+  const handleAddToCart = (service: LaundryService) => {
+    addToCart(service);
+  };
+
+  const handleUpdateQuantity = (serviceId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(serviceId);
       return;
     }
-    setCart((prev) =>
-      prev.map((item) =>
-        item.service.id === serviceId ? { ...item, quantity } : item
-      )
-    );
+    updateQuantity(serviceId, quantity);
   };
 
-  const removeFromCart = (serviceId: string) => {
-    setCart((prev) => prev.filter((item) => item.service.id !== serviceId));
+  const handleRemoveFromCart = (serviceId: string) => {
+    removeFromCart(serviceId);
   };
 
-  const clearCart = () => {
-    setCart([]);
+  const handleClearCart = () => {
+    clearCartStore();
     reset({ customerName: "", customerPhone: "" });
-    setDiscount(0);
     setAppliedCoupon(null);
     setCouponCode("");
     setCouponError(null);
@@ -448,15 +595,30 @@ export default function POSPage() {
 
   // Checkout handler - validates and processes order
   const handleCheckout = async () => {
+    console.log("[POS] handleCheckout called, activeBranch:", activeBranch?.id);
+    
     // Validate customer info first
     const isCustomerValid = await trigger();
+    console.log("[POS] Customer valid:", isCustomerValid, "paymentMethod:", paymentMethod, "cart length:", cart.length);
+    
     if (!isCustomerValid || !paymentMethod || cart.length === 0 || !activeBranch) {
+      console.log("[POS] Validation failed, returning early");
       return;
     }
 
     setIsProcessing(true);
-    
+
     try {
+      // Calculate member discount
+      let memberDiscountAmount = 0;
+      if (memberStatus?.eligible && memberStatus.discountValue) {
+        if (memberStatus.discountType === "percentage") {
+          memberDiscountAmount = (subtotal * memberStatus.discountValue) / 100;
+        } else {
+          memberDiscountAmount = Math.min(memberStatus.discountValue, subtotal);
+        }
+      }
+
       // Build order data matching CreateOrderInput schema
       const orderData = {
         branchId: activeBranch.id,
@@ -467,20 +629,26 @@ export default function POSPage() {
           quantity: item.quantity,
           notes: item.notes,
         })),
-        discount: discount > 0 ? discount : undefined,
-        discountType: discount > 0 ? discountType : (appliedCoupon ? "fixed" : undefined),
+        // Send discount VALUE (not amount) so API can calculate correctly
+        discount: cartStore.discount > 0 ? cartStore.discount : (memberStatus?.discountValue || undefined),
+        discountType: cartStore.discount > 0 ? cartStore.discountType : (memberStatus?.discountType || undefined),
         couponCode: appliedCoupon?.code,
         paymentMethod,
+        // Member package info
+        memberSubscriptionId: memberStatus?.eligible ? memberStatus.subscriptionId : undefined,
+        memberDiscount: memberDiscountAmount > 0 ? memberDiscountAmount : undefined,
+        // Auto-create customer
+        saveAsCustomer: saveAsCustomer && !foundCustomer,
       };
 
       console.log("Creating order:", orderData);
 
       // Call API via hook
       const newOrder = await createOrder(orderData);
-      
+
       if (newOrder) {
         const orderNumber = newOrder.orderNumber || newOrder.id;
-        
+
         // Store order details for receipt printing
         const orderDetails = {
           items: cart.map((item) => ({
@@ -491,8 +659,8 @@ export default function POSPage() {
             subtotal: item.service.price * item.quantity,
           })),
           subtotal: subtotal,
-          discount: totalDiscount,
-          discountType: discount > 0 ? discountType : (appliedCoupon ? "fixed" : undefined),
+          discount: discountAmount,
+          discountType: cartStore.discount > 0 ? cartStore.discountType : (appliedCoupon ? "fixed" : undefined),
           total: total,
           paymentMethod: paymentMethod || "cash",
           estimatedCompletionAt: new Date(newOrder.estimatedCompletionAt),
@@ -607,7 +775,7 @@ Terima kasih! 🙏`;
     setLastOrderId(null);
     setLastOrderDetails(null);
     setPendingPaymentOrder(null);
-    clearCart();
+    handleClearCart();
   };
 
   const handlePrintReceipt = () => {
@@ -708,7 +876,7 @@ Terima kasih! 🙏`;
                     <ServiceCard
                       key={service.id}
                       service={service}
-                      onAdd={addToCart}
+                      onAdd={handleAddToCart}
                     />
                   ))}
                 </div>
@@ -732,15 +900,61 @@ Terima kasih! 🙏`;
 
             <CardContent className="flex-1 overflow-hidden flex flex-col pb-0">
               {/* Customer Info */}
-              <div className="space-y-3 mb-4">
-                <div className="space-y-1">
+              <div className="space-y-3 mb-4 customer-search-container">
+                <div className="space-y-1 relative">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
                       placeholder="Nama pelanggan"
                       {...register("customerName")}
                       className={`pl-10 ${errors.customerName ? "border-red-500" : ""}`}
+                      autoComplete="off"
                     />
+                    {isSearching && (
+                      <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                      onClick={() => setShowCustomerSearch(true)}
+                      disabled={showSearchDropdown}
+                    >
+                      <Search className="h-4 w-4" />
+                    </Button>
+                    
+                    {/* Inline Search Dropdown */}
+                    {showSearchDropdown && searchResults.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {searchResults.map((customer) => (
+                          <button
+                            key={customer.id}
+                            type="button"
+                            onClick={() => handleSelectCustomer(customer)}
+                            className="w-full p-3 text-left hover:bg-accent transition-colors border-b last:border-0"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                                <User className="h-4 w-4 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{customer.name}</p>
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <Phone className="h-3 w-3" />
+                                  <span className="truncate">{customer.phone}</span>
+                                </div>
+                                {customer.totalOrders !== undefined && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {customer.totalOrders} order • {formatCurrency(customer.totalSpent || 0)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {errors.customerName && (
                     <p className="text-xs text-red-500">{errors.customerName.message}</p>
@@ -769,6 +983,55 @@ Terima kasih! 🙏`;
                       </span>
                     </div>
                   )}
+                  
+                  {/* Member Package Status */}
+                  {isCheckingMember && (
+                    <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                      <span className="text-blue-700 dark:text-blue-400">
+                        Memeriksa status member...
+                      </span>
+                    </div>
+                  )}
+                  
+                  {memberStatus && foundCustomer && (
+                    memberStatus.eligible ? (
+                      <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-xs border border-amber-200 dark:border-amber-800">
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium text-amber-700 dark:text-amber-300">
+                            🎫 Member: {memberStatus.packageName}
+                          </span>
+                          {memberStatus.discountValue && (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              ({memberStatus.discountType === 'percentage' ? `${memberStatus.discountValue}%` : formatCurrency(memberStatus.discountValue)} off)
+                            </span>
+                          )}
+                        </div>
+                        {memberStatus.remainingTransactions !== null && memberStatus.remainingTransactions !== undefined && (
+                          <div className="text-amber-600 dark:text-amber-400">
+                            Sisa: {memberStatus.remainingTransactions}x bulan ini
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      memberStatus.message && (
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800/20 rounded text-xs">
+                          <span className="text-gray-500">ℹ️ {memberStatus.message}</span>
+                        </div>
+                      )
+                    )
+                  )}
+
+                  {/* Save as Customer Checkbox */}
+                  {!foundCustomer && customerPhone.length >= 4 && (
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-400">
+                      <Checkbox
+                        checked={saveAsCustomer}
+                        onCheckedChange={(checked) => setSaveAsCustomer(checked as boolean)}
+                      />
+                      <span>Simpan sebagai pelanggan tetap</span>
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -787,8 +1050,8 @@ Terima kasih! 🙏`;
                     <CartItemRow
                       key={item.service.id}
                       item={item}
-                      onUpdateQuantity={updateQuantity}
-                      onRemove={removeFromCart}
+                      onUpdateQuantity={handleUpdateQuantity}
+                      onRemove={handleRemoveFromCart}
                     />
                   ))
                 )}
@@ -807,22 +1070,22 @@ Terima kasih! 🙏`;
                       <Input
                         type="number"
                         placeholder="0"
-                        value={discount || ""}
-                        onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                        value={cartStore.discount || ""}
+                        onChange={(e) => setDiscount(parseFloat(e.target.value) || 0, cartStore.discountType)}
                         className="pl-10"
                       />
                     </div>
                     <Button
-                      variant={discountType === "percentage" ? "default" : "outline"}
+                      variant={cartStore.discountType === "percentage" ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setDiscountType("percentage")}
+                      onClick={() => setDiscount(cartStore.discount, "percentage")}
                     >
                       %
                     </Button>
                     <Button
-                      variant={discountType === "fixed" ? "default" : "outline"}
+                      variant={cartStore.discountType === "fixed" ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setDiscountType("fixed")}
+                      onClick={() => setDiscount(cartStore.discount, "fixed")}
                     >
                       Rp
                     </Button>
@@ -886,12 +1149,23 @@ Terima kasih! 🙏`;
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Diskon</span>
-                    <span>-{formatCurrency(totalDiscount)}</span>
+
+                {/* Member Discount */}
+                {memberStatus?.eligible && memberStatus.discountValue && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Diskon Member ({memberStatus.discountType === 'percentage' ? `${memberStatus.discountValue}%` : formatCurrency(memberStatus.discountValue)})</span>
+                    <span>-{formatCurrency((memberStatus.discountType === 'percentage' ? (subtotal * memberStatus.discountValue / 100) : Math.min(memberStatus.discountValue, subtotal)))}</span>
                   </div>
                 )}
+
+                {/* Manual/Coupon Discount */}
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Diskon {cartStore.discountType === 'percentage' ? `${cartStore.discount}%` : formatCurrency(cartStore.discount)}</span>
+                    <span>-{formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
+
                 <Separator />
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
@@ -904,7 +1178,7 @@ Terima kasih! 🙏`;
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={clearCart}
+                  onClick={handleClearCart}
                   disabled={cart.length === 0}
                 >
                   Batal
@@ -999,16 +1273,17 @@ Terima kasih! 🙏`;
                 {pendingPaymentOrder ? "Pembayaran telah diterima." : "Notifikasi akan dikirim ke WhatsApp pelanggan."}
               </DialogDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <Button 
                 variant="outline" 
                 onClick={handlePrintReceipt}
-                className="flex-1"
+                className="flex-1 h-11 border-2 hover:bg-gray-50"
               >
                 <Printer className="w-4 h-4 mr-2" />
                 Cetak Nota
               </Button>
-              <Button onClick={handleSuccessClose} className="flex-1">
+              <Button onClick={handleSuccessClose} className="flex-1 h-11 bg-green-600 hover:bg-green-700">
+                <CheckCircle className="w-4 h-4 mr-2" />
                 Selesai
               </Button>
             </div>
@@ -1026,6 +1301,42 @@ Terima kasih! 🙏`;
             customerName={pendingPaymentOrder.customerName}
             onPaymentSuccess={handlePaymentSuccess}
             onPaymentExpired={handlePaymentExpired}
+          />
+        )}
+
+        {/* Customer Search Dialog */}
+        <CustomerSearchDialog
+          open={showCustomerSearch}
+          onOpenChange={setShowCustomerSearch}
+          onSelect={(customer) => {
+            // Auto-fill customer name and phone
+            reset((prev) => ({
+              ...prev,
+              customerName: customer.name,
+              customerPhone: customer.phone,
+            }));
+            
+            // Trigger customer lookup to update member status
+            setTimeout(() => {
+              checkMemberStatus(customer.id, 0);
+            }, 100);
+            
+            gooeyToast.success("Pelanggan dipilih", {
+              description: `${customer.name} (${customer.phone})`,
+            });
+          }}
+        />
+
+        {/* Receipt Print Dialog */}
+        {showReceiptDialog && receiptData && (
+          <ReceiptPrint
+            data={{
+              ...receiptData,
+              branchName: activeBranch?.name || "VibeClean Laundry",
+              branchPhone: activeBranch?.phone || "-",
+              createdAt: new Date(),
+            }}
+            onClose={() => setShowReceiptDialog(false)}
           />
         )}
       </>

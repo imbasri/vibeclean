@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import {
   db,
   users,
+  accounts,
   organizationMembers,
   branchPermissions,
   branches,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/db";
 import { eq, and, inArray, sql, desc, ne } from "drizzle-orm";
 import type { UserRole, BranchPermission } from "@/types";
+import bcrypt from "bcrypt";
 
 // Helper to get session
 async function getSession() {
@@ -199,7 +201,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/staff - Invite a new staff member
+// POST /api/staff - Add a new staff member directly (no invitation)
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
@@ -217,34 +219,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user has permission to invite staff
+    // Check if user has permission to add staff
     const hasAccess = await hasStaffManagementAccess(session.user.id);
     if (!hasAccess) {
       return NextResponse.json(
-        { error: "Anda tidak memiliki akses untuk mengundang karyawan" },
+        { error: "Anda tidak memiliki akses untuk menambahkan karyawan" },
         { status: 403 }
       );
     }
 
     const body = await request.json();
-    const { email, branchPermissions: perms } = body;
+    const { name, email, phone, branchPermissions: perms } = body;
 
     // Validate required fields
-    if (!email || !perms || !Array.isArray(perms) || perms.length === 0) {
+    if (!name || !email || !perms || !Array.isArray(perms) || perms.length === 0) {
       return NextResponse.json(
-        { error: "Email dan minimal satu peran per cabang wajib diisi" },
+        { error: "Nama, email, dan minimal satu peran per cabang wajib diisi" },
         { status: 400 }
       );
     }
 
-    // Check if email already exists as a member
+    // Check if email already exists
     const existingUser = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, email))
+      .where(eq(users.email, email.toLowerCase()))
       .limit(1);
 
     if (existingUser[0]) {
+      // Check if already a member of this organization
       const existingMember = await db
         .select({ id: organizationMembers.id })
         .from(organizationMembers)
@@ -262,84 +265,253 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    }
 
-    // Check if there's a pending invitation
-    const pendingInvitation = await db
-      .select({ id: staffInvitations.id })
-      .from(staffInvitations)
-      .where(
-        and(
-          eq(staffInvitations.email, email),
-          eq(staffInvitations.organizationId, organizationId),
-          eq(staffInvitations.status, "pending")
-        )
-      )
-      .limit(1);
+      // User exists but no account - create account with password
+      const hashedPassword = await bcrypt.hash("vibeclean", 10);
+      const userId = existingUser[0].id;
 
-    if (pendingInvitation[0]) {
+      await db.transaction(async (tx) => {
+        // Check if account already exists
+        const existingAccount = await tx
+          .select({ id: accounts.id })
+          .from(accounts)
+          .where(eq(accounts.userId, userId))
+          .limit(1);
+
+        if (!existingAccount[0]) {
+          await tx.insert(accounts).values({
+            userId,
+            accountId: userId,
+            providerId: "password",
+            password: hashedPassword,
+          });
+          console.log("[Staff Create] Account created for existing user");
+        }
+
+        // Create organization member
+        await tx.insert(organizationMembers).values({
+          userId,
+          organizationId,
+        });
+
+        // Get the member ID
+        const [member] = await tx
+          .select({ id: organizationMembers.id })
+          .from(organizationMembers)
+          .where(
+            and(
+              eq(organizationMembers.userId, userId),
+              eq(organizationMembers.organizationId, organizationId)
+            )
+          );
+
+        // Create branch permissions
+        const permissionValues: {
+          memberId: string;
+          branchId: string;
+          role: "owner" | "manager" | "cashier" | "courier";
+        }[] = [];
+
+        for (const perm of perms) {
+          if (perm.branchId && perm.roles && Array.isArray(perm.roles)) {
+            for (const role of perm.roles) {
+              permissionValues.push({
+                memberId: member.id,
+                branchId: perm.branchId,
+                role: role as "owner" | "manager" | "cashier" | "courier",
+              });
+            }
+          }
+        }
+
+        if (permissionValues.length > 0) {
+          await tx.insert(branchPermissions).values(permissionValues);
+        }
+      });
+
       return NextResponse.json(
-        { error: "Undangan untuk email ini sudah ada dan masih pending" },
-        { status: 400 }
+        {
+          success: true,
+          message: "Karyawan berhasil ditambahkan",
+          employee: {
+            name,
+            email,
+          },
+        },
+        { status: 201 }
       );
     }
 
-    // Create the invitation (expires in 7 days)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    // Hash the default password
+    const hashedPassword = await bcrypt.hash("vibeclean", 10);
+    console.log("[Staff Create] Hashed password:", hashedPassword);
+    const userId = crypto.randomUUID();
 
-    const [invitation] = await db
-      .insert(staffInvitations)
-      .values({
-        email,
-        organizationId,
-        invitedBy: session.user.id,
-        expiresAt,
-        status: "pending",
-      })
-      .returning();
+    // Create user and account in a transaction
+    try {
+      await db.transaction(async (tx) => {
+        // Create user
+        await tx.insert(users).values({
+          id: userId,
+          email: email.toLowerCase(),
+          name,
+          phone: phone || null,
+          emailVerified: true,
+        });
+        console.log("[Staff Create] User created:", email.toLowerCase());
 
-    // Create invitation permissions
-    const permissionValues: {
-      invitationId: string;
-      branchId: string;
-      role: "owner" | "manager" | "cashier" | "courier";
-    }[] = [];
+        // Create account with hashed password (for password auth)
+        await tx.insert(accounts).values({
+          userId,
+          accountId: userId,
+          providerId: "password",
+          password: hashedPassword,
+        });
+        console.log("[Staff Create] Account created with password");
 
-    for (const perm of perms) {
-      if (perm.branchId && perm.roles && Array.isArray(perm.roles)) {
-        for (const role of perm.roles) {
-          permissionValues.push({
-            invitationId: invitation.id,
-            branchId: perm.branchId,
-            role: role as "owner" | "manager" | "cashier" | "courier",
-          });
+        // Create organization member
+        await tx.insert(organizationMembers).values({
+          userId,
+          organizationId,
+        });
+        console.log("[Staff Create] Member created");
+
+        // Get the member ID
+        const [member] = await tx
+          .select({ id: organizationMembers.id })
+          .from(organizationMembers)
+          .where(
+            and(
+              eq(organizationMembers.userId, userId),
+              eq(organizationMembers.organizationId, organizationId)
+            )
+          );
+
+        // Create branch permissions
+        const permissionValues: {
+          memberId: string;
+          branchId: string;
+          role: "owner" | "manager" | "cashier" | "courier";
+        }[] = [];
+
+        for (const perm of perms) {
+          if (perm.branchId && perm.roles && Array.isArray(perm.roles)) {
+            for (const role of perm.roles) {
+              permissionValues.push({
+                memberId: member.id,
+                branchId: perm.branchId,
+                role: role as "owner" | "manager" | "cashier" | "courier",
+              });
+            }
+          }
         }
-      }
-    }
 
-    if (permissionValues.length > 0) {
-      await db.insert(invitationPermissions).values(permissionValues);
+        if (permissionValues.length > 0) {
+          await tx.insert(branchPermissions).values(permissionValues);
+          console.log("[Staff Create] Permissions created");
+        }
+      });
+    } catch (txError) {
+      console.error("[Staff Create] Transaction error:", txError);
+      throw txError;
     }
-
-    // TODO: Send invitation email via email service
 
     return NextResponse.json(
       {
-        invitation: {
-          id: invitation.id,
-          email: invitation.email,
-          status: invitation.status,
-          expiresAt: invitation.expiresAt,
+        success: true,
+        message: "Karyawan berhasil ditambahkan",
+        employee: {
+          name,
+          email: email.toLowerCase(),
+          phone: phone || null,
         },
-        message: "Undangan berhasil dikirim",
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating invitation:", error);
+    console.error("Error adding staff:", error);
     return NextResponse.json(
-      { error: "Failed to create invitation" },
+      { error: "Failed to add staff member" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/staff - Reset staff password
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getSession();
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const hasAccess = await hasStaffManagementAccess(session.user.id);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "Anda tidak memiliki akses untuk mengatur password karyawan" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { memberId } = body;
+
+    if (!memberId) {
+      return NextResponse.json(
+        { error: "Member ID wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    // Get the user ID from member
+    const [member] = await db
+      .select({ userId: organizationMembers.userId })
+      .from(organizationMembers)
+      .where(eq(organizationMembers.id, memberId))
+      .limit(1);
+
+    if (!member) {
+      return NextResponse.json(
+        { error: "Karyawan tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash("vibeclean", 10);
+
+    // Check if account exists
+    const [existingAccount] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.userId, member.userId))
+      .limit(1);
+
+    if (existingAccount) {
+      // Update existing account
+      await db
+        .update(accounts)
+        .set({ password: hashedPassword })
+        .where(eq(accounts.id, existingAccount.id));
+    } else {
+      // Create new account
+      await db.insert(accounts).values({
+        userId: member.userId,
+        accountId: member.userId,
+        providerId: "password",
+        password: hashedPassword,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Password berhasil direset ke: vibeclean",
+    });
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    return NextResponse.json(
+      { error: "Failed to reset password" },
       { status: 500 }
     );
   }

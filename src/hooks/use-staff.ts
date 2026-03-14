@@ -20,8 +20,10 @@ interface StaffResponse {
   total: number;
 }
 
-interface InviteStaffData {
+interface AddStaffData {
+  name: string;
   email: string;
+  phone?: string;
   branchPermissions: {
     branchId: string;
     roles: UserRole[];
@@ -41,7 +43,7 @@ interface UseStaffReturn {
   error: string | null;
   total: number;
   refetch: () => Promise<void>;
-  inviteStaff: (data: InviteStaffData) => Promise<{ success: boolean; message?: string }>;
+  addStaff: (data: AddStaffData) => Promise<{ success: boolean; message?: string }>;
   updatePermissions: (memberId: string, data: UpdatePermissionsData) => Promise<boolean>;
   removeStaff: (memberId: string) => Promise<boolean>;
   getStaffMember: (memberId: string) => Promise<StaffMember | null>;
@@ -90,8 +92,8 @@ export function useStaff(): UseStaffReturn {
     fetchStaff();
   }, [fetchStaff]);
 
-  const inviteStaff = useCallback(
-    async (data: InviteStaffData): Promise<{ success: boolean; message?: string }> => {
+  const addStaff = useCallback(
+    async (data: AddStaffData): Promise<{ success: boolean; message?: string }> => {
       try {
         const response = await fetch("/api/staff", {
           method: "POST",
@@ -102,18 +104,21 @@ export function useStaff(): UseStaffReturn {
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.error || "Failed to invite staff");
+          throw new Error(result.error || "Failed to add staff");
         }
+
+        // Refetch staff to get updated list
+        await fetchStaff();
 
         return { success: true, message: result.message };
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Failed to invite staff";
-        console.error("Error inviting staff:", message);
+          err instanceof Error ? err.message : "Failed to add staff";
+        console.error("Error adding staff:", message);
         throw err;
       }
     },
-    []
+    [fetchStaff]
   );
 
   const updatePermissions = useCallback(
@@ -203,7 +208,7 @@ export function useStaff(): UseStaffReturn {
     error,
     total,
     refetch: fetchStaff,
-    inviteStaff,
+    addStaff,
     updatePermissions,
     removeStaff,
     getStaffMember,
@@ -211,4 +216,4 @@ export function useStaff(): UseStaffReturn {
 }
 
 // Export types for use in components
-export type { StaffMember, InviteStaffData, UpdatePermissionsData };
+export type { StaffMember, AddStaffData, UpdatePermissionsData };
