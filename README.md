@@ -35,6 +35,7 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 ## ✨ Fitur Utama
 
 ### 🏪 **Point of Sale (POS)**
+
 - Kasir digital dengan interface yang user-friendly
 - Support pembayaran tunai, QRIS, transfer, dan e-wallet
 - Auto-generate QR code untuk pembayaran
@@ -42,13 +43,15 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - Member discount auto-apply
 
 ### 📦 **Manajemen Pesanan**
+
 - Tracking status pesanan real-time
-  - Menunggu → Diproses → Dicuci → Dikeringkan → Disetrika → Siap Ambil → Selesai
+    - Menunggu → Diproses → Dicuci → Dikeringkan → Disetrika → Siap Ambil → Selesai
 - Notifikasi WhatsApp otomatis
 - Estimated completion time
 - Order history dan search
 
 ### 👥 **Manajemen Pelanggan**
+
 - Customer database terpusat
 - Loyalty points system
 - Member packages (bulanan/tahunan)
@@ -56,6 +59,7 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - Purchase history tracking
 
 ### 🎁 **Paket Member & Loyalty**
+
 - 4 tipe paket member dengan benefit berbeda
 - Auto-apply discount untuk member
 - Transaction limits per month
@@ -63,6 +67,7 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - Tier upgrade system
 
 ### 🏢 **Manajemen Cabang**
+
 - Multi-branch management (Pro: 5 cabang, Enterprise: unlimited)
 - Branch-specific settings
 - QR code customization per cabang
@@ -70,12 +75,14 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - Revenue tracking per cabang
 
 ### 👨‍💼 **Manajemen Karyawan**
+
 - Role-based access control (Owner, Manager, Cashier)
 - Staff performance tracking
 - Permission management
 - Activity logs
 
 ### 📊 **Laporan & Analytics**
+
 - Revenue reports (harian, mingguan, bulanan)
 - Order statistics
 - Customer analytics
@@ -84,15 +91,17 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - Tax reports dengan PDF export
 
 ### 💳 **Billing & Subscription**
+
 - 3 paket langganan:
-  - **Starter** - GRATIS (1 cabang, 3 staff, 100 order/bln)
-  - **Pro** - Rp 149.000/bln (5 cabang, 10 staff/staff, unlimited order)
-  - **Enterprise** - Custom pricing (unlimited everything)
+    - **Starter** - GRATIS (1 cabang, 3 staff, 100 order/bln)
+    - **Pro** - Rp 149.000/bln (5 cabang, 10 staff/staff, unlimited order)
+    - **Enterprise** - Custom pricing (unlimited everything)
 - Mayar payment integration
 - Invoice management
 - Auto-renewal support
 
 ### ⚙️ **Pengaturan**
+
 - Organization settings
 - Tax configuration (PPN)
 - Custom QR code colors
@@ -104,6 +113,7 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 ## 🛠️ Tech Stack
 
 ### **Frontend**
+
 - **Framework:** [Next.js 16.1.6](https://nextjs.org) (App Router)
 - **Language:** [TypeScript 5](https://www.typescriptlang.org)
 - **Styling:** [Tailwind CSS 4](https://tailwindcss.com)
@@ -114,6 +124,7 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - **Forms:** [React Hook Form](https://react-hook-form.com) + [Zod](https://zod.dev)
 
 ### **Backend**
+
 - **Database:** [PostgreSQL](https://www.postgresql.org)
 - **ORM:** [Drizzle ORM](https://orm.drizzle.team)
 - **Auth:** [Better Auth](https://www.better-auth.com)
@@ -124,6 +135,7 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 - **Excel Export:** [XLSX](https://sheetjs.com)
 
 ### **DevOps & Tools**
+
 - **Package Manager:** npm
 - **Linting:** ESLint 9
 - **Testing:** Playwright (E2E)
@@ -134,22 +146,26 @@ VibeClean adalah platform SaaS (Software as a Service) berbasis web yang diranca
 ## 🚀 Cara Menggunakan
 
 ### **Prerequisites**
-- Node.js 18+ 
+
+- Node.js 18+
 - PostgreSQL 14+
 - npm / yarn / pnpm
 
 ### **1. Clone Repository**
+
 ```bash
 git clone https://github.com/your-org/vibeclean.git
 cd vibeclean
 ```
 
 ### **2. Install Dependencies**
+
 ```bash
 npm install
 ```
 
 ### **3. Setup Environment Variables**
+
 Buat file `.env.local` di root directory:
 
 ```env
@@ -175,6 +191,7 @@ WHATSAPP_API_KEY="your-whatsapp-api-key"
 ```
 
 ### **4. Setup Database**
+
 ```bash
 # Generate migrations
 npm run db:generate
@@ -187,6 +204,7 @@ npm run db:push
 ```
 
 ### **5. Run Development Server**
+
 ```bash
 npm run dev
 ```
@@ -194,6 +212,7 @@ npm run dev
 Buka [http://localhost:3000](http://localhost:3000) di browser.
 
 ### **6. Build for Production**
+
 ```bash
 npm run build
 npm start
@@ -277,18 +296,21 @@ vibeclean/
 ## 📡 API Documentation
 
 ### **Authentication**
+
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
 - `POST /api/auth/logout` - Logout user
 - `GET /api/auth/session` - Get current session
 
 ### **Orders**
+
 - `GET /api/orders` - List orders
 - `POST /api/orders` - Create order
 - `PUT /api/orders/[id]` - Update order status
 - `DELETE /api/orders/[id]` - Delete order
 
 ### **Customers**
+
 - `GET /api/customers` - List customers
 - `POST /api/customers` - Create customer
 - `PUT /api/customers/[id]` - Update customer
@@ -296,6 +318,7 @@ vibeclean/
 - `GET /api/customers/search?q=` - Search customers
 
 ### **Member Packages**
+
 - `GET /api/member-packages` - List packages
 - `POST /api/member-packages` - Create package
 - `PUT /api/member-packages/[id]` - Update package
@@ -304,6 +327,7 @@ vibeclean/
 - `POST /api/member-packages/subscriptions` - Create subscription
 
 ### **Billing**
+
 - `GET /api/billing` - Get subscription info
 - `POST /api/billing/subscribe` - Create subscription
 - `POST /api/billing/invoice/[id]/payment-link` - Get payment link
@@ -311,12 +335,14 @@ vibeclean/
 - `POST /api/billing/invoice/[id]/force-activate` - Force activate subscription
 
 ### **Branches**
+
 - `GET /api/branches` - List branches
 - `POST /api/branches` - Create branch
 - `PUT /api/branches/[id]` - Update branch
 - `GET /api/branches/[id]/qrcode` - Get QR code
 
 ### **Reports**
+
 - `GET /api/reports` - Get revenue report
 - `GET /api/reports/tax` - Get tax report
 - `GET /api/reports/export` - Export to Excel
@@ -326,21 +352,25 @@ vibeclean/
 ## 👥 User Roles
 
 ### **Owner**
+
 - Full access to all features
 - Can manage branches, staff, and settings
 - View all reports and analytics
 
 ### **Manager**
+
 - Manage orders and customers
 - View reports (limited)
 - Cannot delete data
 
 ### **Cashier**
+
 - Access to POS only
 - Create and manage orders
 - Cannot access reports or settings
 
 ### **Founder (Super Admin)**
+
 - Manage all organizations
 - View platform-wide analytics
 - Activate/deactivate features
@@ -351,21 +381,27 @@ vibeclean/
 ## 📸 Screenshots
 
 ### Landing Page
+
 ![Landing Page](/public/screenshots/landing.png)
 
 ### Dashboard POS
+
 ![POS](/public/screenshots/pos.png)
 
 ### Order Management
+
 ![Orders](/public/screenshots/orders.png)
 
 ### Member Packages
+
 ![Members](/public/screenshots/members.png)
 
 ### Analytics
+
 ![Analytics](/public/screenshots/analytics.png)
 
 ### Billing & Subscription
+
 ![Billing](/public/screenshots/billing.png)
 
 ---
@@ -408,6 +444,6 @@ For support, email support@vibeclean.id or join our WhatsApp community.
 
 **Built with ❤️ by VibeClean Team**
 
-[Website](https://vibeclean.id) • [Instagram](https://instagram.com/vibeclean) • [TikTok](https://tiktok.com/@vibeclean)
+[Website](https://www.imbasri.dev)
 
 </div>

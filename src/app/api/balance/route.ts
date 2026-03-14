@@ -15,7 +15,7 @@ async function getSession() {
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -33,11 +33,27 @@ export async function GET(request: NextRequest) {
 
     const organizationId = member.id;
 
-    // Get balance
-    let [balance] = await db
-      .select()
-      .from(organizationBalances)
-      .where(eq(organizationBalances.organizationId, organizationId));
+    // Get balance - handle table not exists error
+    let balance;
+    try {
+      [balance] = await db
+        .select()
+        .from(organizationBalances)
+        .where(eq(organizationBalances.organizationId, organizationId));
+    } catch (err) {
+      console.error("Balance table error:", err);
+      // Return empty balance if table doesn't exist
+      return NextResponse.json({
+        balance: {
+          totalEarnings: 0,
+          availableBalance: 0,
+          pendingBalance: 0,
+          totalWithdrawn: 0,
+          lastTransactionAt: null,
+        },
+        transactions: [],
+      });
+    }
 
     // Create balance if doesn't exist
     if (!balance) {
@@ -51,13 +67,19 @@ export async function GET(request: NextRequest) {
       balance = newBalance;
     }
 
-    // Get recent transactions
-    const transactions = await db
-      .select()
-      .from(balanceTransactions)
-      .where(eq(balanceTransactions.organizationId, organizationId))
-      .orderBy(desc(balanceTransactions.createdAt))
-      .limit(20);
+    // Get recent transactions - handle table not exists error
+    let transactions: any[] = [];
+    try {
+      transactions = await db
+        .select()
+        .from(balanceTransactions)
+        .where(eq(balanceTransactions.organizationId, organizationId))
+        .orderBy(desc(balanceTransactions.createdAt))
+        .limit(20);
+    } catch (err) {
+      console.error("Transactions table error:", err);
+      // Return empty transactions if table doesn't exist
+    }
 
     return NextResponse.json({
       balance: {
