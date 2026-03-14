@@ -9,7 +9,7 @@ import { z } from "zod";
 const createPublicPaymentSchema = z.object({
   branchId: z.string().uuid(),
   orderId: z.string().uuid().optional(),
-  amount: z.number().positive(),
+  amount: z.number().positive().optional(),
   customerName: z.string().optional().default("Pelanggan"),
   customerPhone: z.string().optional().default("08000000000"),
   items: z.array(z.object({
@@ -17,6 +17,9 @@ const createPublicPaymentSchema = z.object({
     quantity: z.number().positive(),
     price: z.number().positive(),
   })).optional().default([]),
+  paymentMethod: z.enum(["cash", "qris", "transfer", "ewallet"]).optional().default("qris"),
+  discount: z.number().optional(),
+  couponCode: z.string().optional(),
 });
 
 function generateOrderNumber(): string {
@@ -47,7 +50,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { branchId, orderId, amount, customerName, customerPhone, items } = validationResult.data;
+    const { branchId, orderId, amount, customerName, customerPhone, items, paymentMethod, discount } = validationResult.data;
+
+    // Calculate total amount from items if not provided
+    let totalAmount = amount;
+    let subtotal = amount;
+    
+    if (!totalAmount && items && items.length > 0) {
+      // Calculate from items
+      subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      totalAmount = subtotal - (discount || 0);
+    }
+    
+    if (!totalAmount || totalAmount <= 0) {
+      return NextResponse.json(
+        { error: "Amount must be greater than 0. Provide amount or items with prices." },
+        { status: 400 }
+      );
+    }
 
     // Get branch
     const [branch] = await db
@@ -98,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     // Calculate transaction fee for founder
     const feeSettings = await getTransactionFeeSettings();
-    const transactionFee = calculateTransactionFee(amount, feeSettings);
+    const transactionFee = calculateTransactionFee(totalAmount, feeSettings);
 
     // Calculate estimated completion (default: 3 days from now)
     const estimatedCompletionAt = new Date();
@@ -113,12 +133,12 @@ export async function POST(request: NextRequest) {
         branchId: branch.id,
         customerName,
         customerPhone,
-        subtotal: String(amount),
-        discount: "0",
-        total: String(amount),
+        subtotal: String(subtotal),
+        discount: String(discount || 0),
+        total: String(totalAmount),
         status: "pending",
         paymentStatus: "unpaid",
-        paymentMethod: "qris",
+        paymentMethod: paymentMethod || "qris",
         paidAmount: "0",
         transactionFee: String(transactionFee),
         mayarPaymentId: "", // Will be updated after Mayar response
@@ -126,13 +146,13 @@ export async function POST(request: NextRequest) {
         estimatedCompletionAt,
         createdBy: organization.ownerId, // Use owner as createdBy (system user)
       }).returning();
-      
+
       newOrder = createdOrder;
     } else {
       // Update existing order with new payment info
       await db.update(orders).set({
         paymentStatus: "unpaid",
-        paymentMethod: "qris",
+        paymentMethod: paymentMethod || "qris",
         mayarPaymentId: "",
         mayarTransactionId: "",
         paymentUrl: "",
@@ -168,10 +188,10 @@ export async function POST(request: NextRequest) {
     // Create payment via Mayar with order info
     const paymentResult = await createOrderPayment({
       orderId: newOrder.id, // Use actual order ID
-      amount,
+      amount: totalAmount,
       customerName,
       customerPhone,
-      paymentType: "qris",
+      paymentType: paymentMethod === "qris" ? "qris" : "invoice",
       description: `Pembayaran laundry di ${branch.name} - ${orderNumber}`,
       expiredInMinutes: 30,
       extraData: {
