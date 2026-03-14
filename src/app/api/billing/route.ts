@@ -72,8 +72,71 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
+    // Get user's organization - check both owner and member
+    let organization: typeof organizations.$inferSelect | null = null;
+    
+    // Try as owner first
+    const ownerOrg = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.ownerId, userId))
+      .limit(1);
+    
+    if (ownerOrg.length > 0) {
+      organization = ownerOrg[0];
+    } else {
+      // If not owner, check membership
+      const membership = await db
+        .select({ organizationId: organizationMembers.organizationId })
+        .from(organizationMembers)
+        .where(eq(organizationMembers.userId, userId))
+        .limit(1);
+      
+      if (membership.length > 0) {
+        const memberOrg = await db
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, membership[0].organizationId))
+          .limit(1);
+        
+        if (memberOrg.length > 0) {
+          organization = memberOrg[0];
+        }
+      }
+    }
+
+    // If user has no organization yet, return default starter plan info
+    if (!organization) {
+      return NextResponse.json({
+        plan: "starter",
+        status: "trial",
+        nextBillingDate: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        invoices: [],
+        usage: {
+          ordersUsed: 0,
+          ordersLimit: 100,
+          branchesUsed: 0,
+          branchesLimit: 1,
+          staffUsed: 0,
+          staffLimit: 3,
+          periodStart: new Date(),
+          periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+        usagePercentage: {
+          orders: 0,
+          branches: 0,
+          staff: 0,
+        },
+      });
+    }
+
     // Check if user is owner
-    const userIsOwner = await isOwner(session.user.id);
+    const userIsOwner = await isOwner(userId);
     if (!userIsOwner) {
       return NextResponse.json(
         { error: "Only owners can access billing information" },
@@ -97,7 +160,7 @@ export async function GET(request: NextRequest) {
     const organizationId = membership[0].organizationId;
 
     // Get organization details
-    const [organization] = await db
+    const orgDetails = await db
       .select({
         id: organizations.id,
         name: organizations.name,
@@ -109,9 +172,11 @@ export async function GET(request: NextRequest) {
       .from(organizations)
       .where(eq(organizations.id, organizationId));
 
-    if (!organization) {
+    if (orgDetails.length === 0) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
+
+    const orgData = orgDetails[0];
 
     // Get branch count
     const [branchCount] = await db
@@ -159,22 +224,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate limits based on plan
-    const plan = organization.plan as keyof typeof planLimits;
+    const plan = orgData.plan as keyof typeof planLimits;
     const limits = planLimits[plan] || planLimits.starter;
 
     // Calculate next billing date (assume monthly billing from creation date)
-    const createdAt = new Date(organization.createdAt);
+    const createdAt = new Date(orgData.createdAt);
     const now = new Date();
     let nextBillingDate = new Date(createdAt);
-    
+
     // Advance to next month from creation
     while (nextBillingDate <= now) {
       nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
     }
 
     // If in trial, use trial end date
-    if (organization.subscriptionStatus === "trial" && organization.trialEndsAt) {
-      nextBillingDate = new Date(organization.trialEndsAt);
+    if (orgData.subscriptionStatus === "trial" && orgData.trialEndsAt) {
+      nextBillingDate = new Date(orgData.trialEndsAt);
     }
 
     const daysUntilRenewal = Math.max(
@@ -244,26 +309,26 @@ export async function GET(request: NextRequest) {
     }));
 
     // Use subscription data if available, otherwise use organization defaults
-    const subscriptionPrice = subscription 
-      ? Number(subscription.price) 
+    const subscriptionPrice = subscription
+      ? Number(subscription.price)
       : (planPricing[plan] || 0);
-    
-    const subscriptionStatus = subscription?.status || organization.subscriptionStatus;
+
+    const subscriptionStatus = subscription?.status || orgData.subscriptionStatus;
 
     return NextResponse.json({
       subscription: {
-        plan: organization.plan,
+        plan: orgData.plan,
         status: subscriptionStatus,
         price: subscriptionPrice,
         nextBillingDate: nextBillingDate.toISOString(),
         daysUntilRenewal,
-        trialEndsAt: organization.trialEndsAt?.toISOString() || null,
+        trialEndsAt: orgData.trialEndsAt?.toISOString() || null,
       },
       usage,
       invoices,
       organization: {
-        id: organization.id,
-        name: organization.name,
+        id: orgData.id,
+        name: orgData.name,
       },
     });
   } catch (error) {

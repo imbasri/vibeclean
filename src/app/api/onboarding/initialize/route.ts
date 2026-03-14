@@ -51,7 +51,7 @@ async function generateUniqueSlug(baseName: string): Promise<string> {
 
 /**
  * POST /api/onboarding/initialize
- * 
+ *
  * Initialize a new organization for a newly registered user.
  * Creates:
  * - Organization with starter plan
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!session?.user?.id) {
+      console.error("[Onboarding] No session found");
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -76,6 +77,8 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
     const userName = session.user.name || "User";
 
+    console.log("[Onboarding] Starting for user:", userId, userName);
+
     // Check if user already has an organization
     const existingMembership = await db
       .select({ id: organizationMembers.id })
@@ -84,6 +87,7 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (existingMembership.length > 0) {
+      console.log("[Onboarding] User already has organization");
       return NextResponse.json(
         { error: "User already has an organization", code: "ALREADY_ONBOARDED" },
         { status: 400 }
@@ -98,6 +102,8 @@ export async function POST(req: NextRequest) {
 
     try {
       const body = await req.json();
+      console.log("[Onboarding] Request body:", body);
+      
       if (body.organizationName) {
         organizationName = body.organizationName;
       }
@@ -110,77 +116,127 @@ export async function POST(req: NextRequest) {
       if (body.branchPhone) {
         branchPhone = body.branchPhone;
       }
-    } catch {
-      // Body is optional, use defaults
+    } catch (e) {
+      console.log("[Onboarding] No body provided, using defaults");
+    }
+
+    // Validate required fields
+    if (!organizationName || organizationName.trim().length < 2) {
+      return NextResponse.json(
+        { error: "Nama laundry minimal 2 karakter" },
+        { status: 400 }
+      );
+    }
+
+    if (!branchName || branchName.trim().length < 2) {
+      return NextResponse.json(
+        { error: "Nama cabang minimal 2 karakter" },
+        { status: 400 }
+      );
     }
 
     // Generate unique slug
     const slug = await generateUniqueSlug(organizationName);
+    console.log("[Onboarding] Generated slug:", slug);
 
     // Calculate trial end date (14 days from now)
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    // Create organization
-    const [newOrganization] = await db
-      .insert(organizations)
-      .values({
-        name: organizationName,
-        slug,
-        plan: "starter",
-        subscriptionStatus: "trial",
-        trialEndsAt,
-        ownerId: userId,
-      })
-      .returning();
+    // Create organization in a transaction for safety
+    const result = await db.transaction(async (tx) => {
+      // Create organization
+      const [newOrganization] = await tx
+        .insert(organizations)
+        .values({
+          name: organizationName,
+          slug,
+          plan: "starter",
+          subscriptionStatus: "trial",
+          trialEndsAt,
+          ownerId: userId,
+        })
+        .returning();
 
-    // Create default branch
-    const [newBranch] = await db
-      .insert(branches)
-      .values({
-        organizationId: newOrganization.id,
-        name: branchName,
-        address: branchAddress || "Alamat belum diatur",
-        phone: branchPhone || "-",
-        isActive: true,
-      })
-      .returning();
+      console.log("[Onboarding] Organization created:", newOrganization.id);
 
-    // Create organization membership
-    const [membership] = await db
-      .insert(organizationMembers)
-      .values({
-        userId,
-        organizationId: newOrganization.id,
-        invitedBy: userId, // Self-invited (owner)
-      })
-      .returning();
+      // Create default branch
+      const [newBranch] = await tx
+        .insert(branches)
+        .values({
+          organizationId: newOrganization.id,
+          name: branchName,
+          address: branchAddress || "Alamat belum diatur",
+          phone: branchPhone || "-",
+          isActive: true,
+        })
+        .returning();
 
-    // Create branch permission with owner role
-    await db.insert(branchPermissions).values({
-      memberId: membership.id,
-      branchId: newBranch.id,
-      role: "owner",
+      console.log("[Onboarding] Branch created:", newBranch.id);
+
+      // Create organization membership
+      const [membership] = await tx
+        .insert(organizationMembers)
+        .values({
+          userId,
+          organizationId: newOrganization.id,
+          invitedBy: userId, // Self-invited (owner)
+        })
+        .returning();
+
+      console.log("[Onboarding] Membership created:", membership.id);
+
+      // Create branch permission with owner role
+      await tx.insert(branchPermissions).values({
+        memberId: membership.id,
+        branchId: newBranch.id,
+        role: "owner",
+      });
+
+      console.log("[Onboarding] Branch permission created");
+
+      return {
+        organization: newOrganization,
+        branch: newBranch,
+      };
     });
+
+    console.log("[Onboarding] Success! Organization:", result.organization.id);
 
     return NextResponse.json({
       success: true,
       organization: {
-        id: newOrganization.id,
-        name: newOrganization.name,
-        slug: newOrganization.slug,
-        plan: newOrganization.plan,
-        trialEndsAt: newOrganization.trialEndsAt,
+        id: result.organization.id,
+        name: result.organization.name,
+        slug: result.organization.slug,
+        plan: result.organization.plan,
+        trialEndsAt: result.organization.trialEndsAt,
       },
       branch: {
-        id: newBranch.id,
-        name: newBranch.name,
+        id: result.branch.id,
+        name: result.branch.name,
       },
     });
   } catch (error) {
-    console.error("Onboarding error:", error);
+    console.error("[Onboarding] Error:", error);
+    
+    // Provide more specific error messages
+    let errorMessage = "Failed to initialize organization";
+    
+    if (error instanceof Error) {
+      console.error("[Onboarding] Error details:", error.message);
+      errorMessage = error.message;
+      
+      // Check for common database errors
+      if (error.message.includes("unique constraint")) {
+        errorMessage = "Nama laundry sudah digunakan, coba nama lain";
+      } else if (error.message.includes("foreign key")) {
+        errorMessage = "Data tidak valid, periksa kembali input";
+      }
+    }
+    
     return NextResponse.json(
-      { error: "Failed to initialize organization" },
+      { error: errorMessage },
       { status: 500 }
     );
   }
