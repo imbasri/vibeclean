@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   title: "VibeClean - Platform Manajemen Bisnis Laundry #1 di Indonesia",
   description: "VibeClean adalah platform all-in-one untuk mengelola bisnis laundry Anda. Dari POS, manajemen cabang, hingga laporan keuangan dalam satu dashboard.",
   keywords: ["laundry", "manajemen laundry", "pos laundry", "software laundry", "aplikasi laundry"],
+  icons: {
+    icon: "/logo_vibeclean.png",
+    apple: "/logo_vibeclean.png",
+  },
 };
 
 export default function RootLayout({
