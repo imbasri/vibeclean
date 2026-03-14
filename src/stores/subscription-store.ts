@@ -75,7 +75,17 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   },
 
   canAccessFeature: (feature) => {
-    const { plan } = get();
+    const { plan, status } = get();
+
+    // If subscription hasn't loaded yet, allow basic features (fail-safe)
+    // This prevents empty sidebar during initial load
+    if (!plan || plan === 'starter' || status === 'trial') {
+      // Allow ALL basic features for loading state or starter/trial
+      const basicFeatures = ['dashboard', 'pos', 'orders', 'services', 'customers', 'settings', 'billing', 'balance', 'members', 'loyalty', 'discounts'];
+      if (basicFeatures.includes(feature)) {
+        return true;
+      }
+    }
 
     // ============================================
     // BASIC FEATURES - ALL PLANS (Including Starter)
@@ -89,13 +99,13 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     if (feature === 'settings') return true; // Basic settings
     if (feature === 'billing') return true; // All plans need billing access (to upgrade/manage)
     if (feature === 'balance') return true; // Balance & withdrawals for all
-    
+
     // Member & Loyalty features - Available for ALL plans
     // This helps small businesses grow with customer retention
     if (feature === 'members') return true; // Member packages (all plans)
     if (feature === 'loyalty') return true; // Loyalty coupons (all plans)
     if (feature === 'discounts') return true; // Discount management (all plans)
-    
+
     // ============================================
     // PRO FEATURES (Starter: ❌ | Pro/Enterprise: ✅)
     // ============================================
@@ -112,7 +122,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       // Advanced analytics & reports
       return plan === 'pro' || plan === 'enterprise';
     }
-    
+
     // ============================================
     // ENTERPRISE FEATURES (Starter/Pro: ❌ | Enterprise: ✅)
     // ============================================

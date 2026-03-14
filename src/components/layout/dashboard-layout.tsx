@@ -60,13 +60,15 @@ interface NavItem {
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     const pathname = usePathname();
     const { activeBranch, canAccessFeature, user, logout } = useAuth();
-    const { plan, canAccessFeature: canAccessSubscriptionFeature } = useSubscriptionStore();
+    const { plan, canAccessFeature: canAccessSubscriptionFeature, fetchSubscription } = useSubscriptionStore();
     const [mounted, setMounted] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
 
     useEffect(() => {
         setMounted(true);
-    }, []);
+        // Fetch subscription plan on mount
+        fetchSubscription();
+    }, [fetchSubscription]);
 
     if (!mounted) {
         return null;
