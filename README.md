@@ -25,6 +25,30 @@ Watch VibeClean in action with Mayar Payment Gateway integration:
 
 ---
 
+## 🏆 Mayar Vibecoding Competition
+
+**VibeClean** is proudly submitted to the **Mayar Vibecoding Competition**!
+
+🎉 Thank you to the Mayar team for organizing this amazing competition and providing the opportunity to showcase innovative payment solutions.
+
+### Competition Entry Details
+
+- **Competition**: Mayar Vibecoding Competition
+- **Project**: VibeClean - Platform Manajemen Laundry #1 di Indonesia
+- **Integration**: Mayar Payment Gateway (QRIS, VA, E-Wallet)
+- **Category**: Best Payment Integration & Innovation
+
+### Why VibeClean?
+
+VibeClean demonstrates the power of Mayar Payment Gateway by:
+- ✅ Seamless QRIS payment integration for laundry orders
+- ✅ Real-time payment status updates via webhooks
+- ✅ Multiple payment methods (QRIS, VA, E-Wallet)
+- ✅ Automatic transaction reconciliation
+- ✅ Professional payment experience for end-users
+
+---
+
 ## 📖 Tentang VibeClean
 
 VibeClean adalah platform SaaS (Software as a Service) berbasis web yang dirancang khusus untuk membantu pemilik bisnis laundry mengelola operasional sehari-hari dengan lebih efisien. Dengan fitur lengkap mulai dari kasir POS, manajemen pesanan, loyalty program, hingga analitik bisnis, VibeClean membantu Anda meningkatkan produktivitas dan omzet bisnis laundry.
