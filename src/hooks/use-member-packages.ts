@@ -70,7 +70,7 @@ export function useMemberPackages(): UseMemberPackagesReturn {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/member-packages");
+      const response = await fetch("/api/member-packages", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch packages");
       const data = await response.json();
       setPackages(data);
@@ -104,7 +104,7 @@ export function useMemberPackages(): UseMemberPackagesReturn {
 
   const updatePackage = async (id: string, data: Partial<MemberPackage>): Promise<MemberPackage | null> => {
     try {
-      const response = await fetch(`/api/member-packages/${id}`, {
+      const response = await fetch(`/api/member-packages/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -121,7 +121,7 @@ export function useMemberPackages(): UseMemberPackagesReturn {
 
   const deletePackage = async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/member-packages/${id}`, {
+      const response = await fetch(`/api/member-packages/${id}`, { credentials: "include", 
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete package");
@@ -171,7 +171,7 @@ export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsR
       const url = status 
         ? `/api/member-packages/subscriptions?status=${status}`
         : "/api/member-packages/subscriptions";
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch subscriptions");
       const data = await response.json();
       setSubscriptions(data);
@@ -188,7 +188,7 @@ export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsR
 
   const createSubscription = async (data: any): Promise<MemberSubscription | null> => {
     try {
-      const response = await fetch("/api/member-packages/subscriptions", {
+      const response = await fetch("/api/member-packages/subscriptions", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -204,7 +204,7 @@ export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsR
   };
 
   const cancelSubscription = async (id: string) => {
-    const response = await fetch(`/api/member-packages/subscriptions/${id}`, {
+    const response = await fetch(`/api/member-packages/subscriptions/${id}`, { credentials: "include", 
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancelled" }),
@@ -214,7 +214,7 @@ export function useMemberSubscriptions(status?: string): UseMemberSubscriptionsR
   };
 
   const renewSubscription = async (id: string) => {
-    const response = await fetch(`/api/member-packages/subscriptions/${id}/renew`, {
+    const response = await fetch(`/api/member-packages/subscriptions/${id}/renew`, { credentials: "include", 
       method: "POST",
     });
     if (!response.ok) throw new Error("Failed to renew subscription");
@@ -243,7 +243,7 @@ export async function applyMemberDiscount(
   weight?: number
 ): Promise<MemberDiscount> {
   try {
-    const response = await fetch("/api/member-packages/apply", {
+    const response = await fetch("/api/member-packages/apply", { credentials: "include", 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ customerId, branchId, weight }),
@@ -256,7 +256,7 @@ export async function applyMemberDiscount(
 
 export async function recordMemberTransaction(subscriptionId: string): Promise<boolean> {
   try {
-    const response = await fetch("/api/member-packages/apply", {
+    const response = await fetch("/api/member-packages/apply", { credentials: "include", 
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ subscriptionId }),

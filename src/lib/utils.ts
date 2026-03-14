@@ -19,7 +19,7 @@ export function formatCurrency(amount: number): string {
 
 export function formatDate(date: Date): string {
   if (!date) return "-";
-  
+
   let dateObj: Date;
   if (typeof date === "string") {
     dateObj = new Date(date);
@@ -28,11 +28,11 @@ export function formatDate(date: Date): string {
   } else {
     return "-";
   }
-  
+
   if (!isFinite(dateObj.getTime())) {
     return "-";
   }
-  
+
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "short",
@@ -42,7 +42,7 @@ export function formatDate(date: Date): string {
 
 export function formatDateTime(date: Date): string {
   if (!date) return "-";
-  
+
   let dateObj: Date;
   if (typeof date === "string") {
     dateObj = new Date(date);
@@ -51,11 +51,11 @@ export function formatDateTime(date: Date): string {
   } else {
     return "-";
   }
-  
+
   if (!isFinite(dateObj.getTime())) {
     return "-";
   }
-  
+
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "short",
@@ -63,4 +63,18 @@ export function formatDateTime(date: Date): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(dateObj);
+}
+
+/**
+ * Authenticated fetch wrapper that includes credentials (cookies) with every request.
+ * Use this for all authenticated API calls to ensure session cookies are sent.
+ */
+export async function authFetch(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  return fetch(url, {
+    ...options,
+    credentials: "include",
+  });
 }

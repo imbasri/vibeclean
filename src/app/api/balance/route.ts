@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db, organizationBalances, balanceTransactions, organizations } from "@/lib/db";
+import { db, organizationBalances, balanceTransactions, organizations, organizationMembers } from "@/lib/db";
 import { eq, desc } from "drizzle-orm";
 
 async function getSession() {
@@ -20,18 +20,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user's organization
-    const [member] = await db
+    const userId = session.user.id;
+
+    // Get user's organization - check both as owner and as member
+    let organization;
+    
+    // First, try to get organization where user is the owner
+    [organization] = await db
       .select()
       .from(organizations)
-      .where(eq(organizations.ownerId, session.user.id))
+      .where(eq(organizations.ownerId, userId))
       .limit(1);
 
-    if (!member) {
+    // If not found as owner, check if user is a member of any organization
+    if (!organization) {
+      const [memberRecord] = await db
+        .select({
+          organizationId: organizationMembers.organizationId,
+        })
+        .from(organizationMembers)
+        .where(eq(organizationMembers.userId, userId))
+        .limit(1);
+
+      if (memberRecord) {
+        [organization] = await db
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, memberRecord.organizationId))
+          .limit(1);
+      }
+    }
+
+    if (!organization) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
-    const organizationId = member.id;
+    const organizationId = organization.id;
 
     // Get balance - handle table not exists error
     let balance;

@@ -503,30 +503,61 @@ export default function LandingPage() {
               >
                 <ThemeToggle />
               </motion.div>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Link href="/login">
-                  <Button variant="ghost" className="hover:bg-primary/10 hover:text-primary">
-                    Masuk
-                  </Button>
-                </Link>
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Link href="/register">
-                  <Button className="bg-primary hover:bg-primary/90 shadow-md">
-                    Daftar Gratis
-                  </Button>
-                </Link>
-              </motion.div>
+              {session ? (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <Link href="/dashboard">
+                      <Button variant="ghost" className="hover:bg-primary/10 hover:text-primary">
+                        Dashboard
+                      </Button>
+                    </Link>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Link href="/dashboard">
+                      <Button className="bg-primary hover:bg-primary/90 shadow-md">
+                        Kelola Bisnis
+                      </Button>
+                    </Link>
+                  </motion.div>
+                </>
+              ) : (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <Link href="/login">
+                      <Button variant="ghost" className="hover:bg-primary/10 hover:text-primary">
+                        Masuk
+                      </Button>
+                    </Link>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Link href="/register">
+                      <Button className="bg-primary hover:bg-primary/90 shadow-md">
+                        Daftar Gratis
+                      </Button>
+                    </Link>
+                  </motion.div>
+                </>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -562,12 +593,25 @@ export default function LandingPage() {
                     <span className="text-sm font-medium text-muted-foreground">Tema</span>
                     <ThemeToggle />
                   </div>
-                  <Link href="/login">
-                    <Button variant="ghost" className="w-full">Masuk</Button>
-                  </Link>
-                  <Link href="/register">
-                    <Button className="w-full">Daftar Gratis</Button>
-                  </Link>
+                  {session ? (
+                    <>
+                      <Link href="/dashboard">
+                        <Button variant="ghost" className="w-full">Dashboard</Button>
+                      </Link>
+                      <Link href="/dashboard">
+                        <Button className="w-full">Kelola Bisnis</Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/login">
+                        <Button variant="ghost" className="w-full">Masuk</Button>
+                      </Link>
+                      <Link href="/register">
+                        <Button className="w-full">Daftar Gratis</Button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

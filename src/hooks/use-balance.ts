@@ -45,7 +45,9 @@ export function useBalance(): UseBalanceReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/balance");
+      const response = await fetch("/api/balance", {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -107,6 +109,7 @@ export async function requestWithdrawal(data: WithdrawalRequest): Promise<Withdr
     const response = await fetch("/api/balance/withdraw", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(data),
     });
 

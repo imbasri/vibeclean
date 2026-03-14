@@ -44,7 +44,7 @@ export function useCoupons(): UseCouponsReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/coupons");
+      const response = await fetch("/api/coupons", { credentials: "include" });
       const data = await response.json();
       
       if (!response.ok) {
@@ -113,7 +113,7 @@ export function useCoupons(): UseCouponsReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/coupons?id=${id}`, {
+      const response = await fetch(`/api/coupons?id=${id}`, { credentials: "include", 
         method: "DELETE",
       });
       const result = await response.json();
@@ -142,7 +142,7 @@ export function useCoupons(): UseCouponsReturn {
     }
   ): Promise<{ success: boolean; discount: number; coupon?: Coupon }> => {
     try {
-      const response = await fetch("/api/coupons/apply", {
+      const response = await fetch("/api/coupons/apply", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -59,7 +59,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
     data: CreateCustomerInput
   ): Promise<Customer | null> => {
     try {
-      const response = await fetch("/api/customers", {
+      const response = await fetch("/api/customers", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -89,7 +89,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
     data: CreateCustomerInput
   ): Promise<Customer | null> => {
     try {
-      const response = await fetch(`/api/customers/${id}`, {
+      const response = await fetch(`/api/customers/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -118,7 +118,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
 
   const deleteCustomer = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/customers/${id}`, {
+      const response = await fetch(`/api/customers/${id}`, { credentials: "include", 
         method: "DELETE",
       });
 

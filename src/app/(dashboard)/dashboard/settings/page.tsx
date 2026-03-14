@@ -10,7 +10,6 @@ import {
   Palette,
   Globe,
   Save,
-  Camera,
   Mail,
   Phone,
   Lock,
@@ -45,6 +44,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { useProfile, useOrganization, usePassword } from "@/hooks/use-settings";
+import { UploadDropzone } from "@/utils/uploadthing";
 
 // Animation config
 const easeOut: Easing = [0.16, 1, 0.3, 1];
@@ -175,31 +175,21 @@ export default function SettingsPage() {
   const [lastSaved, setLastSaved] = useState<{ [key: string]: Date }>({});
   
   // API hooks
-  const { 
-    profile, 
-    isLoading: profileLoading, 
-    updateProfile, 
+  const {
+    profile,
+    isLoading: profileLoading,
+    updateProfile,
     isUpdating: profileUpdating,
-    uploadImage 
   } = useProfile();
-  
-  const { 
-    organization, 
-    isLoading: orgLoading, 
-    updateOrganization, 
+
+  const {
+    organization,
+    isLoading: orgLoading,
+    updateOrganization,
     isUpdating: orgUpdating,
-    uploadLogo 
   } = useOrganization();
 
   const { changePassword, isChanging: passwordChanging } = usePassword();
-
-  // File upload refs
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const orgLogoInputRef = useRef<HTMLInputElement>(null);
-
-  // Upload states
-  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   // Profile form state with validation
   const [profileForm, setProfileForm] = useState({
@@ -537,48 +527,25 @@ export default function SettingsPage() {
                           {profileForm.name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="space-y-2">
-                        <div>
-                          <input
-                            type="file"
-                            ref={profileImageInputRef}
-                            className="hidden"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              
-                              setIsUploadingProfile(true);
-                              const result = await uploadImage(file);
-                              setIsUploadingProfile(false);
-                              
-                              if (result.success) {
-                                gooeyToast.success("Foto Diubah", { description: "Foto profil berhasil diperbarui" });
-                              } else {
-                                gooeyToast.error("Gagal Upload", { description: result.error || "Terjadi kesalahan" });
-                              }
-                              
-                              if (profileImageInputRef.current) {
-                                profileImageInputRef.current.value = "";
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <UploadDropzone
+                            endpoint="profileImage"
+                            onClientUploadComplete={(res) => {
+                              const imageUrl = res?.[0]?.url;
+                              if (imageUrl) {
+                                updateProfile({ image: imageUrl }).then(() => {
+                                  gooeyToast.success("Foto Diubah", { description: "Foto profil berhasil diperbarui" });
+                                });
                               }
                             }}
+                            onUploadError={(error: Error) => {
+                              gooeyToast.error("Gagal Upload", { description: error.message || "Terjadi kesalahan" });
+                            }}
+                            className="ut-button:bg-primary ut-button:text-white ut-button:hover:bg-primary/90 ut-label:text-muted-foreground ut-allowed-content:text-muted-foreground/70"
                           />
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => profileImageInputRef.current?.click()}
-                            disabled={isUploadingProfile}
-                            className="gap-2"
-                          >
-                            {isUploadingProfile ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Camera className="h-4 w-4" />
-                            )}
-                            Ubah Foto
-                          </Button>
                         </div>
-                        <p className="text-xs text-gray-500">JPG, PNG maksimal 500KB</p>
+                        <p className="text-xs text-gray-500">JPG, PNG, WebP, GIF maksimal 512KB</p>
                       </div>
                     </div>
 
@@ -690,48 +657,25 @@ export default function SettingsPage() {
                             orgForm.name.substring(0, 2).toUpperCase() || "VC"
                           )}
                         </div>
-                        <div className="space-y-2">
-                          <div>
-                            <input
-                              type="file"
-                              ref={orgLogoInputRef}
-                              className="hidden"
-                              accept="image/jpeg,image/png,image/webp,image/gif"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                
-                                setIsUploadingLogo(true);
-                                const result = await uploadLogo(file);
-                                setIsUploadingLogo(false);
-                                
-                                if (result.success) {
-                                  gooeyToast.success("Logo Diubah", { description: "Logo organisasi berhasil diperbarui" });
-                                } else {
-                                  gooeyToast.error("Gagal Upload", { description: result.error || "Terjadi kesalahan" });
-                                }
-                                
-                                if (orgLogoInputRef.current) {
-                                  orgLogoInputRef.current.value = "";
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <UploadDropzone
+                              endpoint="organizationLogo"
+                              onClientUploadComplete={(res) => {
+                                const logoUrl = res?.[0]?.url;
+                                if (logoUrl) {
+                                  updateOrganization({ logo: logoUrl }).then(() => {
+                                    gooeyToast.success("Logo Diubah", { description: "Logo organisasi berhasil diperbarui" });
+                                  });
                                 }
                               }}
+                              onUploadError={(error: Error) => {
+                                gooeyToast.error("Gagal Upload", { description: error.message || "Terjadi kesalahan" });
+                              }}
+                              className="ut-button:bg-primary ut-button:text-white ut-button:hover:bg-primary/90 ut-label:text-muted-foreground ut-allowed-content:text-muted-foreground/70"
                             />
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => orgLogoInputRef.current?.click()}
-                              disabled={isUploadingLogo}
-                              className="gap-2"
-                            >
-                              {isUploadingLogo ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Camera className="h-4 w-4" />
-                              )}
-                              Ubah Logo
-                            </Button>
                           </div>
-                          <p className="text-xs text-gray-500">JPG, PNG maksimal 500KB</p>
+                          <p className="text-xs text-gray-500">JPG, PNG, WebP, GIF maksimal 512KB</p>
                         </div>
                       </div>
 

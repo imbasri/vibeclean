@@ -11,3 +11,13 @@ export const {
   useSession,
   getSession,
 } = authClient;
+
+export async function logout() {
+  await signOut({
+    fetchOptions: {
+      onSuccess: () => {
+        window.location.href = "/";
+      },
+    },
+  });
+}

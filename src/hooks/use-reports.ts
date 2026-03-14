@@ -95,7 +95,9 @@ export function useReports(options: UseReportsOptions = {}): UseReportsReturn {
       if (options.branchId) params.set("branchId", options.branchId);
       if (options.period) params.set("period", options.period);
 
-      const response = await fetch(`/api/reports?${params.toString()}`);
+      const response = await fetch(`/api/reports?${params.toString()}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();

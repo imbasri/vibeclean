@@ -79,7 +79,7 @@ export function useBilling(): UseBillingReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/billing");
+      const response = await fetch("/api/billing", { credentials: "include" });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -108,6 +108,7 @@ export function useBilling(): UseBillingReturn {
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "include",
           body: JSON.stringify({ plan }),
         });
 
@@ -145,7 +146,7 @@ export function useBilling(): UseBillingReturn {
       try {
         setIsSubscribing(true);
 
-        const response = await fetch("/api/billing/subscribe", {
+        const response = await fetch("/api/billing/subscribe", { credentials: "include", 
           method: "POST",
           headers: {
             "Content-Type": "application/json",

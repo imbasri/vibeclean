@@ -26,6 +26,7 @@ export interface OrganizationData {
 export interface ProfileUpdateData {
   name?: string;
   phone?: string;
+  image?: string;
 }
 
 export interface OrganizationUpdateData {
@@ -76,7 +77,7 @@ export function useProfile(): UseProfileReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/settings/profile");
+      const response = await fetch("/api/settings/profile", { credentials: "include" });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -167,7 +168,7 @@ export function useOrganization(): UseOrganizationReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/settings/organization");
+      const response = await fetch("/api/settings/organization", { credentials: "include" });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -262,7 +263,7 @@ export function usePassword(): UsePasswordReturn {
       try {
         setIsChanging(true);
 
-        const response = await fetch("/api/settings/password", {
+        const response = await fetch("/api/settings/password", { credentials: "include", 
           method: "POST",
           headers: {
             "Content-Type": "application/json",

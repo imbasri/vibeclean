@@ -77,7 +77,9 @@ export function useDashboardStats(
       if (options.branchId) params.set("branchId", options.branchId);
       if (options.period) params.set("period", options.period);
 
-      const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
+      const response = await fetch(`/api/dashboard/stats?${params.toString()}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();

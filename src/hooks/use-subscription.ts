@@ -67,7 +67,7 @@ export function useSubscription(): UseSubscriptionReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/billing/usage");
+      const response = await fetch("/api/billing/usage", { credentials: "include" });
 
       if (response.status === 401) {
         setError("Please log in to continue");
@@ -161,7 +161,7 @@ export async function checkSubscriptionLimit(
   action: "create_order" | "create_branch"
 ): Promise<{ allowed: boolean; message?: string }> {
   try {
-    const response = await fetch("/api/billing/usage");
+    const response = await fetch("/api/billing/usage", { credentials: "include" });
     
     if (!response.ok) {
       // If we can't fetch, allow the action (fail open)

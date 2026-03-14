@@ -60,7 +60,7 @@ export function useStaff(): UseStaffReturn {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/staff");
+      const response = await fetch("/api/staff", { credentials: "include" });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -124,7 +124,7 @@ export function useStaff(): UseStaffReturn {
   const updatePermissions = useCallback(
     async (memberId: string, data: UpdatePermissionsData): Promise<boolean> => {
       try {
-        const response = await fetch(`/api/staff/${memberId}`, {
+        const response = await fetch(`/api/staff/${memberId}`, { credentials: "include", 
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -152,7 +152,7 @@ export function useStaff(): UseStaffReturn {
   const removeStaff = useCallback(
     async (memberId: string): Promise<boolean> => {
       try {
-        const response = await fetch(`/api/staff/${memberId}`, {
+        const response = await fetch(`/api/staff/${memberId}`, { credentials: "include", 
           method: "DELETE",
         });
 
@@ -179,7 +179,9 @@ export function useStaff(): UseStaffReturn {
   const getStaffMember = useCallback(
     async (memberId: string): Promise<StaffMember | null> => {
       try {
-        const response = await fetch(`/api/staff/${memberId}`);
+        const response = await fetch(`/api/staff/${memberId}`, {
+          credentials: "include",
+        });
 
         if (!response.ok) {
           const errorData = await response.json();

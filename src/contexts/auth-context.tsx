@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import type { AuthUser, Branch, UserRole, BranchPermission } from "@/types";
-import { useSession, signOut as betterAuthSignOut } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
+import { logout as authLogout } from "@/lib/auth-client";
 // Note: Dummy data removed - now fetching from API
 
 // ============================================
@@ -248,7 +249,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ============================================
 
   const logout = useCallback(async () => {
-    await betterAuthSignOut();
+    await authLogout();
     setAuthUser(null);
     setUserBranches([]);
     setNeedsOnboarding(false);

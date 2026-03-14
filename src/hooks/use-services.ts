@@ -62,7 +62,7 @@ export function useServices(options: UseServicesOptions = {}): UseServicesReturn
     data: CreateServiceInput & { branchId: string; isActive?: boolean }
   ): Promise<LaundryService | null> => {
     try {
-      const response = await fetch("/api/services", {
+      const response = await fetch("/api/services", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -92,7 +92,7 @@ export function useServices(options: UseServicesOptions = {}): UseServicesReturn
     data: CreateServiceInput & { isActive?: boolean }
   ): Promise<LaundryService | null> => {
     try {
-      const response = await fetch(`/api/services/${id}`, {
+      const response = await fetch(`/api/services/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -121,7 +121,7 @@ export function useServices(options: UseServicesOptions = {}): UseServicesReturn
 
   const deleteService = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/services/${id}`, {
+      const response = await fetch(`/api/services/${id}`, { credentials: "include", 
         method: "DELETE",
       });
 
@@ -146,7 +146,7 @@ export function useServices(options: UseServicesOptions = {}): UseServicesReturn
     isActive: boolean
   ): Promise<LaundryService | null> => {
     try {
-      const response = await fetch(`/api/services/${id}`, {
+      const response = await fetch(`/api/services/${id}`, { credentials: "include", 
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive }),

@@ -104,7 +104,7 @@ export function useBranches(
   const createBranch = useCallback(
     async (data: CreateBranchData): Promise<Branch | null> => {
       try {
-        const response = await fetch("/api/branches", {
+        const response = await fetch("/api/branches", { credentials: "include", 
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -140,7 +140,7 @@ export function useBranches(
   const updateBranch = useCallback(
     async (id: string, data: UpdateBranchData): Promise<Branch | null> => {
       try {
-        const response = await fetch(`/api/branches/${id}`, {
+        const response = await fetch(`/api/branches/${id}`, { credentials: "include", 
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -178,7 +178,7 @@ export function useBranches(
 
   const deleteBranch = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/branches/${id}`, {
+      const response = await fetch(`/api/branches/${id}`, { credentials: "include", 
         method: "DELETE",
       });
 
@@ -203,7 +203,9 @@ export function useBranches(
 
   const getBranch = useCallback(async (id: string): Promise<Branch | null> => {
     try {
-      const response = await fetch(`/api/branches/${id}`);
+      const response = await fetch(`/api/branches/${id}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();

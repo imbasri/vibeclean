@@ -75,7 +75,9 @@ export function useOrders(options: UseOrdersOptions = {}): UseOrdersReturn {
       if (options.page) params.set("page", String(options.page));
       if (options.limit) params.set("limit", String(options.limit));
 
-      const response = await fetch(`/api/orders?${params.toString()}`);
+      const response = await fetch(`/api/orders?${params.toString()}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -120,6 +122,7 @@ export function useOrders(options: UseOrdersOptions = {}): UseOrdersReturn {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(data),
       });
 
@@ -174,6 +177,7 @@ export function useOrders(options: UseOrdersOptions = {}): UseOrdersReturn {
       const response = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(data),
       });
 
@@ -216,6 +220,7 @@ export function useOrders(options: UseOrdersOptions = {}): UseOrdersReturn {
     try {
       const response = await fetch(`/api/orders/${id}`, {
         method: "DELETE",
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -238,7 +243,9 @@ export function useOrders(options: UseOrdersOptions = {}): UseOrdersReturn {
 
   const getOrder = useCallback(async (id: string): Promise<Order | null> => {
     try {
-      const response = await fetch(`/api/orders/${id}`);
+      const response = await fetch(`/api/orders/${id}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
