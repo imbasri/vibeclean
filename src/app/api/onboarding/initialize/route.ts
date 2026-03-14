@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
 
       console.log("[Onboarding] Organization created:", newOrganization.id);
 
-      // Create default branch
+      // Create default branch (without QR customization columns for production compatibility)
       const [newBranch] = await tx
         .insert(branches)
         .values({
@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
           address: branchAddress || "Alamat belum diatur",
           phone: branchPhone || "-",
           isActive: true,
+          // Note: qrLogoUrl, qrColorDark, qrColorLight use database defaults
         })
         .returning();
 

@@ -286,10 +286,10 @@ export const branches = pgTable(
     address: text("address").notNull(),
     phone: text("phone").notNull(),
     isActive: boolean("is_active").notNull().default(true),
-    // QR Code customization settings
-    qrLogoUrl: text("qr_logo_url"),
-    qrColorDark: text("qr_color_dark").default("#000000"),
-    qrColorLight: text("qr_color_light").default("#FFFFFF"),
+    // QR Code customization settings (optional - uses defaults if not set)
+    qrLogoUrl: text("qr_logo_url").default("/logo_vibeclean.png"),
+    qrColorDark: text("qr_color_dark").default("#1e40af"), // blue-800
+    qrColorLight: text("qr_color_light").default("#ffffff"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
