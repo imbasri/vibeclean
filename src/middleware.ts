@@ -1,28 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyFounderSession } from "@/lib/founder-auth";
-import { auth } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // Get session for regular users
-  let session;
-  try {
-    session = await auth.api.getSession({
-      headers: request.headers,
-    });
-  } catch (error) {
-    console.error("[Middleware] Session error:", error);
-  }
-
-  const isAuthenticated = !!session;
-
-  // Redirect authenticated users away from auth pages
-  if (isAuthenticated && (pathname === "/login" || pathname === "/register")) {
-    const dashboardUrl = new URL("/dashboard", request.url);
-    return NextResponse.redirect(dashboardUrl);
-  }
 
   // Redirect /admin to /founder/dashboard
   if (pathname.startsWith("/admin")) {
@@ -43,13 +23,23 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(dashboardUrl);
     }
 
-    // Verify founder session for other routes
-    const founderSession = await verifyFounderSession();
-
-    if (!founderSession) {
+    // Verify founder session by checking cookie
+    // We check the cookie existence here, actual validation happens in the route
+    const founderCookie = request.cookies.get("founder_session");
+    if (!founderCookie) {
       const loginUrl = new URL("/founder/login", request.url);
       return NextResponse.redirect(loginUrl);
     }
+  }
+
+  // Check for session cookie for regular users (Better Auth sets this by default)
+  const sessionCookie = request.cookies.get("better-auth.session_token");
+  const isAuthenticated = !!sessionCookie;
+
+  // Redirect authenticated users away from auth pages
+  if (isAuthenticated && (pathname === "/login" || pathname === "/register")) {
+    const dashboardUrl = new URL("/dashboard", request.url);
+    return NextResponse.redirect(dashboardUrl);
   }
 
   return NextResponse.next();
