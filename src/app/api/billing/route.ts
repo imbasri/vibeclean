@@ -291,11 +291,15 @@ export async function GET(request: NextRequest) {
         amount: subscriptionInvoices.amount,
         status: subscriptionInvoices.status,
         plan: subscriptionInvoices.plan,
+        billingCycle: subscriptionInvoices.billingCycle,
+        periodStart: subscriptionInvoices.periodStart,
+        periodEnd: subscriptionInvoices.periodEnd,
+        paidAt: subscriptionInvoices.paidAt,
         paymentUrl: subscriptionInvoices.paymentUrl,
       })
       .from(subscriptionInvoices)
       .where(eq(subscriptionInvoices.organizationId, organizationId))
-      .orderBy(desc(subscriptionInvoices.createdAt))
+      .orderBy(desc(subscriptionInvoices.paidAt))
       .limit(10);
 
     const invoices = dbInvoices.map((inv) => ({
@@ -305,6 +309,10 @@ export async function GET(request: NextRequest) {
       amount: Number(inv.amount),
       status: inv.status as "paid" | "pending" | "failed",
       plan: inv.plan || plan,
+      billingCycle: inv.billingCycle,
+      periodStart: inv.periodStart?.toISOString(),
+      periodEnd: inv.periodEnd?.toISOString(),
+      paidAt: inv.paidAt?.toISOString(),
       paymentUrl: inv.paymentUrl,
     }));
 

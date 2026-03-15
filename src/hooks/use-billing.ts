@@ -30,6 +30,10 @@ export interface BillingInvoice {
   amount: number;
   status: "paid" | "pending" | "failed";
   plan: string;
+  billingCycle?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  paidAt?: string;
   paymentUrl?: string;
 }
 

@@ -517,14 +517,32 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
   const updatedPlan: "starter" | "pro" | "enterprise" = plan || subscription.plan;
   const updatedBillingCycle: "monthly" | "yearly" = billingCycle || (subscription.billingCycle as "monthly" | "yearly") || "monthly";
 
-  // Calculate new billing period based on billing cycle
-  const currentPeriodStart = new Date();
+  // Calculate new billing period
+  // IMPORTANT: If subscription is already active, extend from current period end
+  // Otherwise, start from now
+  const now = new Date();
+  const currentPeriodStart = now;
   const currentPeriodEnd = new Date();
+  
+  // Check if subscription is already active and has a future period end
+  const existingPeriodEnd = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+  const isAlreadyActive = subscription.status === "active" && existingPeriodEnd && existingPeriodEnd > now;
+  
+  if (isAlreadyActive) {
+    // Extend from existing period end (add 1 month or 1 year)
+    currentPeriodStart.setTime(existingPeriodEnd.getTime());
+    currentPeriodEnd.setTime(existingPeriodEnd.getTime());
+  }
+  
+  // Add billing cycle to period end
   if (updatedBillingCycle === "yearly") {
     currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
   } else {
     currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
   }
+
+  console.log(`[Mayar Webhook] Subscription period: ${currentPeriodStart.toISOString()} to ${currentPeriodEnd.toISOString()}`);
+  console.log(`[Mayar Webhook] Is already active: ${isAlreadyActive}, Existing end: ${existingPeriodEnd?.toISOString()}`);
 
   // Update subscription and create invoice in transaction
   await db.transaction(async (tx) => {

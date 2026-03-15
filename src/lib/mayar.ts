@@ -301,15 +301,36 @@ export async function createOrderPayment(
             invoice.link,
         );
 
-        // If QRIS is requested, also generate QR code
+        // If QRIS is requested, generate QR code from invoice link
         let qrCodeUrl: string | undefined;
         if (request.paymentType === 'qris') {
             try {
+                // Option 1: Try to get QRIS from Mayar (if available)
                 const qris = await createQRIS(request.amount);
-                qrCodeUrl = qris.url;
-            } catch (error) {
-                // QRIS generation failed, but invoice is still valid
-                console.error('Failed to generate QRIS:', error);
+                const qrisData = qris.url;
+                
+                // Generate QR code from QRIS string
+                const QRCode = (await import('qrcode')).default;
+                qrCodeUrl = await QRCode.toDataURL(qrisData, {
+                    width: 400,
+                    margin: 2,
+                    errorCorrectionLevel: 'M',
+                });
+                console.log('[Mayar] QRIS QR code generated from Mayar API');
+            } catch (qrisError) {
+                // Option 2: If QRIS API fails, generate QR from payment link
+                console.warn('QRIS API failed, using payment link instead:', qrisError);
+                try {
+                    const QRCode = (await import('qrcode')).default;
+                    qrCodeUrl = await QRCode.toDataURL(invoice.link, {
+                        width: 400,
+                        margin: 2,
+                        errorCorrectionLevel: 'M',
+                    });
+                    console.log('[Mayar] QR code generated from invoice link (fallback)');
+                } catch (linkError) {
+                    console.error('Failed to generate QR from link:', linkError);
+                }
             }
         }
 

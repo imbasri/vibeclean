@@ -677,18 +677,27 @@ function BillingContent() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>No. Invoice</TableHead>
-                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Periode Billing</TableHead>
                       <TableHead>Paket</TableHead>
                       <TableHead className="text-right">Jumlah</TableHead>
                       <TableHead className="text-center">Status</TableHead>
                       <TableHead className="w-[100px]"></TableHead>
                     </TableRow>
                   </TableHeader>
-<TableBody>
+                  <TableBody>
                     {invoices.map((invoice) => (
                       <TableRow key={invoice.id}>
                         <TableCell className="font-medium">{invoice.invoiceNumber || invoice.id}</TableCell>
-                        <TableCell>{formatDate(new Date(invoice.date))}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm">
+                              {invoice.periodStart ? formatDate(new Date(invoice.periodStart)) : '-'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              s/d {invoice.periodEnd ? formatDate(new Date(invoice.periodEnd)) : '-'}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell className="capitalize">{invoice.plan}</TableCell>
                         <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
                         <TableCell className="text-center">
