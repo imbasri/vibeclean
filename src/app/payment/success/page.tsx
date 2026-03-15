@@ -199,6 +199,35 @@ function PaymentSuccessContent() {
 
   // Show checking state
   if (paymentStatus === "checking" || paymentStatus === "expired") {
+    const [isManuallyChecking, setIsManuallyChecking] = useState(false);
+
+    const handleManualCheck = async () => {
+      setIsManuallyChecking(true);
+      try {
+        console.log("[Manual Check] Force checking payment status...");
+        
+        const response = await fetch(`/api/payments/force-check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId, transactionId }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log("[Manual Check] Force check result:", data);
+
+          if (data.order.isPaid) {
+            setPaymentStatus("paid");
+            setPaymentChecked(data.order);
+          }
+        }
+      } catch (error) {
+        console.error("[Manual Check] Error:", error);
+      } finally {
+        setIsManuallyChecking(false);
+      }
+    };
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-4">
         <motion.div
@@ -219,8 +248,31 @@ function PaymentSuccessContent() {
                 <p className="text-sm text-muted-foreground">Order ID</p>
                 <p className="font-mono text-xs">{orderId}</p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Harap tunggu sebentar...
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                <AlertCircle className="h-4 w-4 inline mr-1 mb-0.5" />
+                <p>
+                  Jika Anda sudah membayar tapi status tidak berubah, klik tombol di bawah untuk memeriksa secara manual.
+                </p>
+              </div>
+              <Button 
+                onClick={handleManualCheck} 
+                disabled={isManuallyChecking}
+                className="w-full"
+              >
+                {isManuallyChecking ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Memeriksa...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Periksa Status Manual
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Polling otomatis: {pollingCount + 1}/{MAX_POLLING_COUNT}
               </p>
             </CardContent>
           </Card>
