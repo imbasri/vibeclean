@@ -235,9 +235,12 @@ export function OrderDetailDialog({
 
   const handleRegeneratePayment = async () => {
     if (!order) return;
-    
+
     try {
       setIsUpdatingStatus(true);
+      
+      console.log("[Regenerate Payment] Creating new QRIS for order:", order.id);
+      
       const response = await fetch("/api/payments/public/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -247,35 +250,40 @@ export function OrderDetailDialog({
           amount: Number(order.total),
           customerName: order.customerName,
           customerPhone: order.customerPhone,
+          paymentMethod: "qris",
         }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Gagal membuat pembayaran");
+        const errorData = await response.json();
+        console.error("[Regenerate Payment] API error:", errorData);
+        throw new Error(errorData.error || "Gagal generate QRIS baru");
       }
 
       const data = await response.json();
-      
-      // Show success and keep dialog open to show payment info
-      gooeyToast.success("QRIS berhasil digenerate!");
-      
-      // If we have QR code URL, show it in a new window or alert
-      if (data.qrCodeUrl) {
-        // Open payment URL in new tab
-        window.open(data.paymentUrl, '_blank');
-      } else if (data.paymentUrl) {
-        // Fallback to payment URL
-        window.open(data.paymentUrl, '_blank');
-      }
-      
-      // Refresh the order data
+      console.log("[Regenerate Payment] New QRIS created:", data);
+
+      gooeyToast.success("QRIS baru berhasil dibuat!", {
+        description: "Silakan scan QRIS untuk pembayaran",
+      });
+
+      // Call the update callback if provided
       if (onUpdate) {
         onUpdate();
       }
+
+      // Close and reopen dialog to show new QRIS info
+      onOpenChange(false);
+      setTimeout(() => {
+        onOpenChange(true);
+      }, 500);
+      
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal membuat pembayaran";
-      gooeyToast.error(message);
+      console.error("[Regenerate Payment] Error:", error);
+      const message = error instanceof Error ? error.message : "Gagal generate QRIS baru";
+      gooeyToast.error(message, {
+        description: "Pastikan Mayar API sudah dikonfigurasi dengan benar",
+      });
     } finally {
       setIsUpdatingStatus(false);
     }
