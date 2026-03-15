@@ -109,6 +109,11 @@ export function OrderDetailDialog({
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState<OrderStatus | "">("");
+  const [regeneratedPayment, setRegeneratedPayment] = useState<{
+    paymentUrl?: string;
+    qrCodeUrl?: string;
+    expiredAt?: string;
+  } | null>(null);
 
   if (!order) return null;
 
@@ -117,7 +122,7 @@ export function OrderDetailDialog({
   const PaymentIcon = paymentMethod.icon;
   
   // Check if order has digital payment info
-  const hasDigitalPayment = order.mayarPaymentId || order.paymentUrl;
+  const hasDigitalPayment = order.mayarPaymentId || order.paymentUrl || regeneratedPayment?.paymentUrl;
   const isDigitalPaymentPending = hasDigitalPayment && order.paymentStatus === "unpaid";
   const canMarkAsPaid = order.paymentStatus !== "paid";
   
@@ -125,18 +130,24 @@ export function OrderDetailDialog({
   const paymentExpiredAt = order.paymentExpiredAt 
     ? new Date(order.paymentExpiredAt) 
     : null;
-  const isPaymentExpired = paymentExpiredAt && paymentExpiredAt < new Date();
+  
+  // Use regenerated payment data if available, otherwise use order data
+  const displayQrCodeUrl = regeneratedPayment?.qrCodeUrl || order.qrCodeUrl;
+  const displayPaymentUrl = regeneratedPayment?.paymentUrl || order.paymentUrl;
+  const displayExpiredAt = regeneratedPayment?.expiredAt || (paymentExpiredAt ? paymentExpiredAt.toISOString() : null);
+  const displayExpiredAtDate = displayExpiredAt ? new Date(displayExpiredAt) : null;
+  const isPaymentExpired = displayExpiredAtDate ? displayExpiredAtDate < new Date() : (paymentExpiredAt ? paymentExpiredAt < new Date() : false);
 
   const copyPaymentUrl = () => {
-    if (order.paymentUrl) {
-      navigator.clipboard.writeText(order.paymentUrl);
+    if (displayPaymentUrl) {
+      navigator.clipboard.writeText(displayPaymentUrl);
       gooeyToast.success("Link pembayaran disalin!");
     }
   };
 
   const openPaymentUrl = () => {
-    if (order.paymentUrl) {
-      window.open(order.paymentUrl, "_blank");
+    if (displayPaymentUrl) {
+      window.open(displayPaymentUrl, "_blank");
     }
   };
 
@@ -278,20 +289,30 @@ export function OrderDetailDialog({
       const data = errorData;
       console.log("[Regenerate Payment] New QRIS created:", data);
 
-      gooeyToast.success("QRIS baru berhasil dibuat!", {
-        description: "Silakan scan QRIS untuk pembayaran",
-      });
+      if (data.success) {
+        // Save regenerated payment data to local state
+        setRegeneratedPayment({
+          paymentUrl: data.paymentUrl,
+          qrCodeUrl: data.qrCodeUrl,
+          expiredAt: data.expiredAt,
+        });
 
-      // Call the update callback if provided
-      if (onUpdate) {
-        onUpdate();
+        gooeyToast.success("QRIS baru berhasil dibuat!", {
+          description: "Silakan scan QRIS untuk pembayaran",
+        });
+
+        // Open payment URL in new tab
+        if (data.paymentUrl) {
+          window.open(data.paymentUrl, "_blank");
+        }
+
+        // Call the update callback if provided
+        if (onUpdate) {
+          onUpdate();
+        }
+      } else {
+        throw new Error(data.error || "Gagal generate QRIS baru");
       }
-
-      // Close and reopen dialog to show new QRIS info
-      onOpenChange(false);
-      setTimeout(() => {
-        onOpenChange(true);
-      }, 500);
       
     } catch (error) {
       console.error("[Regenerate Payment] Error:", error);
@@ -568,7 +589,7 @@ export function OrderDetailDialog({
                 )}
 
                 {/* Payment URL Actions */}
-                {isDigitalPaymentPending && !isPaymentExpired && order.paymentUrl && (
+                {isDigitalPaymentPending && !isPaymentExpired && displayPaymentUrl && (
                   <div className="flex gap-2 pt-2">
                     <Button variant="outline" size="sm" onClick={copyPaymentUrl} className="flex-1">
                       <Copy className="w-4 h-4 mr-1" />
@@ -582,12 +603,12 @@ export function OrderDetailDialog({
                 )}
 
                 {/* QR Code Display */}
-                {isDigitalPaymentPending && !isPaymentExpired && order.qrCodeUrl && (
+                {isDigitalPaymentPending && !isPaymentExpired && displayQrCodeUrl && (
                   <div className="flex justify-center pt-2">
                     <div className="rounded-lg border bg-white p-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={order.qrCodeUrl}
+                        src={displayQrCodeUrl}
                         alt="QRIS Payment QR Code"
                         className="w-32 h-32"
                       />
