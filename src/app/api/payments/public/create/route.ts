@@ -58,6 +58,10 @@ function generateOrderNumber(): string {
     return `ORD-${timestamp}-${random}`;
 }
 
+// Simple in-memory rate limiting (for production, use Redis or similar)
+const paymentRequestCooldown = new Map<string, number>();
+const COOLDOWN_MS = 10000; // 10 seconds
+
 // POST /api/payments/public/create - Create a payment without authentication
 export async function POST(request: NextRequest) {
     console.log('[PublicPayment] ========== START ==========');
@@ -103,6 +107,35 @@ export async function POST(request: NextRequest) {
             paymentMethod,
             discount,
         } = validationResult.data;
+
+        // Rate limiting for payment regeneration (prevent spam)
+        if (orderId) {
+            const now = Date.now();
+            const lastRequest = paymentRequestCooldown.get(orderId);
+            
+            if (lastRequest && (now - lastRequest) < COOLDOWN_MS) {
+                const remainingSeconds = Math.ceil((COOLDOWN_MS - (now - lastRequest)) / 1000);
+                console.log(`[PublicPayment] Rate limited: ${orderId}, try again in ${remainingSeconds}s`);
+                
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `Terlalu banyak permintaan. Mohon tunggu ${remainingSeconds} detik sebelum mencoba lagi.`,
+                        errorCode: 'RATE_LIMITED',
+                    },
+                    { status: 429 },
+                );
+            }
+            
+            paymentRequestCooldown.set(orderId, now);
+            
+            // Clean up old entries (older than 1 minute)
+            paymentRequestCooldown.forEach((timestamp, key) => {
+                if (now - timestamp > 60000) {
+                    paymentRequestCooldown.delete(key);
+                }
+            });
+        }
 
         // Calculate total amount from items if not provided
         let totalAmount = amount;

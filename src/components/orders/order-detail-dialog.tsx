@@ -236,11 +236,19 @@ export function OrderDetailDialog({
   const handleRegeneratePayment = async () => {
     if (!order) return;
 
+    // Prevent spam clicks
+    if (isUpdatingStatus) {
+      gooeyToast.warning("Mohon tunggu", {
+        description: "Sedang memproses permintaan sebelumnya...",
+      });
+      return;
+    }
+
     try {
       setIsUpdatingStatus(true);
-      
+
       console.log("[Regenerate Payment] Creating new QRIS for order:", order.id);
-      
+
       const response = await fetch("/api/payments/public/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -254,13 +262,20 @@ export function OrderDetailDialog({
         }),
       });
 
+      const errorData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
         console.error("[Regenerate Payment] API error:", errorData);
+        
+        // Handle rate limiting specifically
+        if (response.status === 429 || errorData.error?.includes("Too Many Requests")) {
+          throw new Error("Terlalu banyak permintaan. Mohon tunggu beberapa saat sebelum mencoba lagi.");
+        }
+        
         throw new Error(errorData.error || "Gagal generate QRIS baru");
       }
 
-      const data = await response.json();
+      const data = errorData;
       console.log("[Regenerate Payment] New QRIS created:", data);
 
       gooeyToast.success("QRIS baru berhasil dibuat!", {
