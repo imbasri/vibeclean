@@ -2,6 +2,7 @@
 export { useCartStore, type CartItem } from './cart-store';
 export { useOrderStore } from './order-store';
 export { useUIStore } from './ui-store';
+export { usePaymentStore } from './payment-store';
 
 // Business Entity Stores
 export { useCustomerStore } from './customer-store';

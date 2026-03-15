@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { gooeyToast } from "goey-toast";
+import { usePaymentStore } from "@/stores/payment-store";
 
 interface PaymentQRISDialogProps {
   open: boolean;
@@ -58,11 +59,23 @@ export function PaymentQRISDialog({
   onPaymentSuccess,
   onPaymentExpired,
 }: PaymentQRISDialogProps) {
+  // Use Zustand store for payment state
+  const {
+    isProcessing,
+    paymentUrl,
+    qrCodeUrl,
+    expiredAt,
+    error,
+    errorCode,
+    startPayment,
+    setPaymentResult,
+    setError,
+    clearPayment,
+  } = usePaymentStore();
+
   const [status, setStatus] = useState<
     "idle" | "creating" | "waiting" | "paid" | "expired" | "error"
   >("idle");
-  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
 
   // Format currency
@@ -84,9 +97,11 @@ export function PaymentQRISDialog({
   // Create payment
   const createPayment = useCallback(async () => {
     setStatus("creating");
-    setError(null);
+    startPayment(orderId, amount);
 
     try {
+      console.log("[PaymentQRIS] Creating payment for order:", orderId);
+      
       // Use public/create API which integrates with Mayar QRIS
       const response = await fetch("/api/payments/public/create", {
         method: "POST",
@@ -96,18 +111,40 @@ export function PaymentQRISDialog({
           amount,
           customerName: customerName || "Pelanggan",
           customerPhone: "08000000000", // Default phone for walk-in customers
-          paymentType: "qris",
-          expiredInMinutes: 30, // 30 minutes expiration
+          paymentMethod: "qris",
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create payment");
+        console.error("[PaymentQRIS] Payment creation failed:", data);
+        const errorMessage = data.error || data.details || "Failed to create payment";
+        
+        // Check for specific error types
+        if (response.status === 503) {
+          // Payment gateway not configured - show manual payment option
+          setError("Payment gateway tidak tersedia. Silakan gunakan pembayaran manual.", "GATEWAY_UNAVAILABLE");
+        } else if (response.status === 500) {
+          // Server error
+          setError("Terjadi kesalahan server. Silakan coba lagi.", "SERVER_ERROR");
+        } else {
+          setError(errorMessage, "PAYMENT_FAILED");
+        }
+        
+        setStatus("error");
+        return;
       }
 
-      setPaymentData(data);
+      // Store payment result in Zustand
+      setPaymentResult({
+        paymentUrl: data.paymentUrl,
+        qrCodeUrl: data.qrCodeUrl,
+        paymentId: data.paymentId,
+        transactionId: data.transactionId,
+        expiredAt: data.expiredAt,
+      });
+      
       setStatus("waiting");
 
       // Calculate countdown
@@ -117,11 +154,15 @@ export function PaymentQRISDialog({
         const remaining = Math.floor((expiredTime - now) / 1000);
         setCountdown(Math.max(0, remaining));
       }
+      
+      console.log("[PaymentQRIS] Payment created successfully:", data.transactionId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      console.error("[PaymentQRIS] Error creating payment:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      setError(errorMessage, "NETWORK_ERROR");
       setStatus("error");
     }
-  }, [orderId]);
+  }, [orderId, amount, customerName, startPayment, setPaymentResult, setError]);
 
   // Check payment status
   const checkPaymentStatus = useCallback(async () => {
@@ -149,10 +190,10 @@ export function PaymentQRISDialog({
 
   // Initialize payment when dialog opens
   useEffect(() => {
-    if (open && status === "idle") {
+    if (open && status === "idle" && !isProcessing) {
       createPayment();
     }
-  }, [open, status, createPayment]);
+  }, [open, status, isProcessing, createPayment]);
 
   // Countdown timer
   useEffect(() => {
@@ -184,25 +225,34 @@ export function PaymentQRISDialog({
   useEffect(() => {
     if (!open) {
       setStatus("idle");
-      setPaymentData(null);
-      setError(null);
-      setCountdown(0);
+      clearPayment();
     }
-  }, [open]);
+  }, [open, clearPayment]);
 
   // Copy payment URL to clipboard
   const copyPaymentUrl = () => {
-    if (paymentData?.paymentUrl) {
-      navigator.clipboard.writeText(paymentData.paymentUrl);
+    if (paymentUrl) {
+      navigator.clipboard.writeText(paymentUrl);
       gooeyToast.success("Link pembayaran disalin!");
     }
   };
 
   // Open payment URL in new tab
   const openPaymentUrl = () => {
-    if (paymentData?.paymentUrl) {
-      window.open(paymentData.paymentUrl, "_blank");
+    if (paymentUrl) {
+      window.open(paymentUrl, "_blank");
     }
+  };
+
+  // Get error message based on error code
+  const getErrorMessage = () => {
+    if (errorCode === "GATEWAY_UNAVAILABLE") {
+      return "Payment gateway tidak tersedia. Silakan gunakan pembayaran manual (cash/transfer).";
+    }
+    if (errorCode === "SERVER_ERROR") {
+      return "Terjadi kesalahan server. Silakan coba lagi nanti.";
+    }
+    return error || "Terjadi kesalahan. Silakan coba lagi.";
   };
 
   return (
@@ -243,12 +293,12 @@ export function PaymentQRISDialog({
           )}
 
           {/* QR Code Display */}
-          {status === "waiting" && paymentData?.qrCodeUrl && (
+          {status === "waiting" && qrCodeUrl && (
             <div className="flex flex-col items-center gap-3">
               <div className="rounded-lg border bg-white p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={paymentData.qrCodeUrl}
+                  src={qrCodeUrl}
                   alt="QRIS Payment QR Code"
                   className="h-48 w-48"
                 />
@@ -264,7 +314,7 @@ export function PaymentQRISDialog({
           )}
 
           {/* Waiting for Payment (no QR, use payment URL) */}
-          {status === "waiting" && !paymentData?.qrCodeUrl && paymentData?.paymentUrl && (
+          {status === "waiting" && !qrCodeUrl && paymentUrl && (
             <div className="flex flex-col items-center gap-3">
               <div className="rounded-lg border bg-muted/50 p-6">
                 <QrCode className="h-24 w-24 text-muted-foreground" />
@@ -316,8 +366,8 @@ export function PaymentQRISDialog({
             <div className="flex flex-col items-center gap-2 py-4">
               <XCircle className="h-16 w-16 text-red-500" />
               <p className="font-medium text-red-600">Gagal Membuat Pembayaran</p>
-              <p className="text-sm text-muted-foreground text-center">
-                {error || "Terjadi kesalahan. Silakan coba lagi."}
+              <p className="text-sm text-muted-foreground text-center px-4">
+                {getErrorMessage()}
               </p>
             </div>
           )}

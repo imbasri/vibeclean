@@ -65,9 +65,15 @@ export async function POST(request: NextRequest) {
         console.log('[PublicPayment] Checking Mayar configuration...');
         // Check if Mayar is configured
         if (!isMayarConfigured()) {
-            console.error('[PublicPayment] Mayar not configured');
+            console.error('[PublicPayment] Mayar not configured - MAYAR_API_KEY missing');
+            // Return fallback mode response
             return NextResponse.json(
-                { error: 'Payment gateway is not configured' },
+                {
+                    success: false,
+                    error: 'Payment gateway tidak tersedia',
+                    fallback: true,
+                    message: 'Silakan gunakan pembayaran manual (cash/transfer)',
+                },
                 { status: 503 },
             );
         }
@@ -281,22 +287,54 @@ export async function POST(request: NextRequest) {
             'amount:',
             totalAmount,
         );
-        const paymentResult = await createOrderPayment({
-            orderId: newOrder.id, // Use actual order ID
-            amount: totalAmount,
-            customerName,
-            customerPhone,
-            paymentType: paymentMethod === 'qris' ? 'qris' : 'invoice',
-            description: `Pembayaran laundry di ${branch.name} - ${orderNumber}`,
-            expiredInMinutes: 30,
-            extraData: {
-                orderId: newOrder.id,
-                orderNumber,
-                organizationId: organization.id,
-                organizationName: organization.name,
-                branchName: branch.name,
-            },
-        });
+        
+        let paymentResult;
+        try {
+            paymentResult = await createOrderPayment({
+                orderId: newOrder.id, // Use actual order ID
+                amount: totalAmount,
+                customerName,
+                customerPhone,
+                paymentType: paymentMethod === 'qris' ? 'qris' : 'invoice',
+                description: `Pembayaran laundry di ${branch.name} - ${orderNumber}`,
+                expiredInMinutes: 30,
+                extraData: {
+                    orderId: newOrder.id,
+                    orderNumber,
+                    organizationId: organization.id,
+                    organizationName: organization.name,
+                    branchName: branch.name,
+                },
+            });
+        } catch (mayarError) {
+            console.error('[PublicPayment] Mayar API error:', mayarError);
+            
+            // Rollback - delete the order if payment creation fails
+            await db.delete(orders).where(eq(orders.id, newOrder.id));
+            
+            // Check if it's a Mayar configuration error
+            if (mayarError instanceof Error && mayarError.message.includes('MAYAR_API_KEY')) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: 'Payment gateway tidak dikonfigurasi',
+                        fallback: true,
+                        message: 'Silakan hubungi admin untuk mengaktifkan pembayaran QRIS',
+                    },
+                    { status: 503 },
+                );
+            }
+            
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: 'Gagal membuat pembayaran QRIS',
+                    details: mayarError instanceof Error ? mayarError.message : 'Unknown error',
+                },
+                { status: 500 },
+            );
+        }
+        
         console.log('[PublicPayment] Mayar payment result:', paymentResult);
 
         if (!paymentResult.success) {
@@ -304,7 +342,11 @@ export async function POST(request: NextRequest) {
             await db.delete(orders).where(eq(orders.id, newOrder.id));
 
             return NextResponse.json(
-                { error: paymentResult.error || 'Failed to create payment' },
+                { 
+                    success: false,
+                    error: paymentResult.error || 'Failed to create payment',
+                    errorCode: 'PAYMENT_CREATION_FAILED',
+                },
                 { status: 500 },
             );
         }

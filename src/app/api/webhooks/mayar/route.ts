@@ -410,6 +410,8 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
   // Extract organization ID from custom_field or extraData
   let organizationId: string | null = null;
   let subscriptionId: string | null = null;
+  let plan: string | null = null;
+  let billingCycle: string | null = null;
 
   // Check custom_field
   if (data.custom_field) {
@@ -426,12 +428,29 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
     if (subField) {
       subscriptionId = String(subField.value);
     }
+
+    // Extract plan and billingCycle from custom_field
+    const planField = data.custom_field.find(
+      (f) => f.key === "plan"
+    );
+    if (planField) {
+      plan = String(planField.value);
+    }
+
+    const billingCycleField = data.custom_field.find(
+      (f) => f.key === "billingCycle" || f.key === "billing_cycle"
+    );
+    if (billingCycleField) {
+      billingCycle = String(billingCycleField.value);
+    }
   }
 
   // Check extraData
   if (data.extraData) {
     organizationId = organizationId || data.extraData.organization_id || data.extraData.orgId || null;
     subscriptionId = subscriptionId || data.extraData.subscription_id || data.extraData.subscriptionId || null;
+    plan = plan || data.extraData.plan || null;
+    billingCycle = billingCycle || data.extraData.billingCycle || data.extraData.billing_cycle || null;
   }
 
   if (!organizationId) {
@@ -441,7 +460,7 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
 
   // Find subscription by ID or by organization
   let subscription;
-  
+
   if (subscriptionId) {
     [subscription] = await db
       .select()
@@ -462,8 +481,7 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
     return;
   }
 
-  // Skip if subscription is already active and payment was already processed
-  // Check if we already have an invoice with this transaction ID
+  // Skip if we already have an invoice with this transaction ID
   const [existingInvoice] = await db
     .select()
     .from(subscriptionInvoices)
@@ -477,33 +495,43 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
   const paidAt = new Date(data.updatedAt || new Date().toISOString());
   const nettAmount = data.nettAmount || data.amount;
 
-  // Calculate new billing period
+  // Use plan from invoice data if available, otherwise keep existing
+  const updatedPlan = plan || subscription.plan;
+  const updatedBillingCycle = billingCycle || subscription.billingCycle || "monthly";
+
+  // Calculate new billing period based on billing cycle
   const currentPeriodStart = new Date();
   const currentPeriodEnd = new Date();
-  currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1); // Add 1 month
+  if (updatedBillingCycle === "yearly") {
+    currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+  } else {
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+  }
 
   // Update subscription and create invoice in transaction
   await db.transaction(async (tx) => {
-    // Update subscription to active
+    // Update subscription to active with correct plan and period
     await tx
       .update(subscriptions)
       .set({
         status: "active",
+        plan: updatedPlan,
+        billingCycle: updatedBillingCycle,
         currentPeriodStart,
         currentPeriodEnd,
         updatedAt: new Date(),
       })
       .where(eq(subscriptions.id, subscription.id));
 
-    // Create invoice record (using schema-compatible fields)
+    // Create invoice record
     await tx.insert(subscriptionInvoices).values({
       subscriptionId: subscription.id,
       organizationId: subscription.organizationId,
       invoiceNumber: `INV-${Date.now()}`,
       amount: String(data.amount),
       status: "paid",
-      plan: subscription.plan,
-      billingCycle: subscription.billingCycle || "monthly",
+      plan: updatedPlan,
+      billingCycle: updatedBillingCycle,
       mayarTransactionId: data.transactionId,
       mayarPaymentId: data.id,
       periodStart: currentPeriodStart,
@@ -516,14 +544,14 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
     await tx
       .update(organizations)
       .set({
-        plan: subscription.plan,
+        plan: updatedPlan,
         subscriptionStatus: "active",
         updatedAt: new Date(),
       })
       .where(eq(organizations.id, subscription.organizationId));
   });
 
-  console.log(`[Mayar Webhook] Subscription ${subscription.id} activated for org ${organizationId}`);
+  console.log(`[Mayar Webhook] Subscription ${subscription.id} activated for org ${organizationId} with plan ${updatedPlan}`);
 }
 
 // GET endpoint for webhook verification (some providers require this)
