@@ -302,14 +302,6 @@ export async function POST(request: NextRequest) {
           billingCycle,
           invoiceNumber,
         },
-        // Also send in custom_field for better webhook compatibility
-        customField: [
-          { key: "organization_id", value: organization.id },
-          { key: "subscription_id", value: subscriptionRecord.id },
-          { key: "plan", value: plan },
-          { key: "billingCycle", value: billingCycle },
-          { key: "invoiceNumber", value: invoiceNumber },
-        ],
       });
 
       // Create subscription invoice record
