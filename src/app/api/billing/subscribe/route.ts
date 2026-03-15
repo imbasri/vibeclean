@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
       console.log('[Subscribe] ==========================================');
 
       // Create subscription invoice record
-      await db.insert(subscriptionInvoices).values({
+      const [createdInvoice] = await db.insert(subscriptionInvoices).values({
         subscriptionId: subscriptionRecord.id,
         organizationId: organization.id,
         invoiceNumber,
@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
         periodStart,
         periodEnd,
         dueDate,
-      });
+      }).returning();
 
       return NextResponse.json({
         success: true,
@@ -356,6 +356,7 @@ export async function POST(request: NextRequest) {
         requiresPayment: true,
         paymentUrl: invoice.link,
         invoiceNumber,
+        invoiceId: createdInvoice.id,
         amount: price,
         dueDate: dueDate.toISOString(),
       });

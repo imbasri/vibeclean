@@ -52,6 +52,7 @@ export interface SubscribeResult {
   requiresPayment?: boolean;
   paymentUrl?: string;
   invoiceNumber?: string;
+  invoiceId?: string;
   amount?: number;
   message?: string;
   error?: string;
@@ -171,6 +172,7 @@ export function useBilling(): UseBillingReturn {
             requiresPayment: true,
             paymentUrl: result.paymentUrl,
             invoiceNumber: result.invoiceNumber,
+            invoiceId: result.invoiceId,
             amount: result.amount,
             message: result.message,
           };
