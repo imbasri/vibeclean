@@ -197,6 +197,49 @@ function BillingContent() {
     }
   }, [data, mounted]);
 
+  // Auto-polling state for subscription payment
+  const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
+  const [pollingCount, setPollingCount] = useState(0);
+
+  // Auto-polling for subscription payment
+  useEffect(() => {
+    if (!pendingInvoiceId || !mounted) return;
+
+    const maxPolling = 60; // Max 60 checks (about 3 minutes)
+    
+    if (pollingCount >= maxPolling) {
+      gooeyToast.warning("Waktu habis", { description: "Silakan periksa manual status pembayaran Anda" });
+      setPendingInvoiceId(null);
+      setPollingCount(0);
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/billing/invoice/${pendingInvoiceId}/check-payment`, {
+          method: "POST",
+        });
+        const result = await response.json();
+        
+        if (result.success && result.paid) {
+          gooeyToast.success("Pembayaran Dikonfirmasi!", { 
+            description: `Paket berhasil diaktifkan!` 
+          });
+          setPendingInvoiceId(null);
+          setPollingCount(0);
+          refetch();
+        } else {
+          setPollingCount(prev => prev + 1);
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+        setPollingCount(prev => prev + 1);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [pendingInvoiceId, pollingCount, mounted, refetch]);
+
   const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -251,8 +294,17 @@ function BillingContent() {
       const result = await response.json();
       
       if (result.success && result.paymentUrl) {
-        // Open payment in same tab and wait for redirect back
-        window.location.href = result.paymentUrl;
+        // Open payment in new tab
+        window.open(result.paymentUrl, "_blank");
+        
+        // Set pending invoice for auto-polling
+        setPendingInvoiceId(invoiceId);
+        setPollingCount(0);
+        
+        gooeyToast.info("Memulai Polling", {
+          description: "Halaman pembayaran telah dibuka. Sistem akan otomatis memeriksa status pembayaran.",
+          duration: 5000,
+        });
       } else {
         gooeyToast.error("Gagal", { description: result.error || "Tidak dapat membuat link pembayaran" });
       }
@@ -273,11 +325,19 @@ function BillingContent() {
 
     if (result.success) {
       if (result.requiresPayment && result.paymentUrl) {
-        // Open payment URL in new tab or show payment dialog
+        // Open payment URL in new tab
+        window.open(result.paymentUrl, "_blank");
+        
+        // Set pending invoice for auto-polling
+        if (result.invoiceId) {
+          setPendingInvoiceId(result.invoiceId);
+          setPollingCount(0);
+        }
+        
         setPaymentUrl(result.paymentUrl);
         setPaymentDialogOpen(true);
         gooeyToast.success("Invoice Dibuat", {
-          description: `Silakan lakukan pembayaran untuk aktivasi paket.`
+          description: `Silakan lakukan pembayaran. Halaman pembayaran telah dibuka di tab baru.`
         });
       } else {
         // Free plan activated
@@ -707,7 +767,13 @@ function BillingContent() {
                           {invoice.status === "paid" && (
                             <Badge className="bg-green-100 text-foreground">Lunas</Badge>
                           )}
-                          {invoice.status === "pending" && (
+                          {invoice.status === "pending" && pendingInvoiceId === invoice.id && (
+                            <div className="flex items-center justify-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                              <span className="text-xs text-primary">Menunggu...</span>
+                            </div>
+                          )}
+                          {invoice.status === "pending" && pendingInvoiceId !== invoice.id && (
                             <Badge className="bg-amber-100 text-primary">Pending</Badge>
                           )}
                           {invoice.status === "failed" && (
