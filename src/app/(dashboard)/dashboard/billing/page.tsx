@@ -330,9 +330,12 @@ function BillingContent() {
 
       if (result.success) {
         gooeyToast.success(result.message || "Paket Pro berhasil diaktifkan!", {
-          description: "Silakan refresh halaman untuk melihat perubahan",
+          description: "Mengalihkan ke dashboard...",
         });
-        setTimeout(() => window.location.reload(), 1500);
+        // Redirect to dashboard after successful activation
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 2000);
       } else {
         gooeyToast.error("Gagal Activate", {
           description: result.error || "Invoice belum lunas atau error",
@@ -750,19 +753,10 @@ function BillingContent() {
                                   variant="outline"
                                   size="sm"
                                   className="h-7"
-                                  title="Sync Status Subscription"
-                                  onClick={() => syncSubscriptionStatus(invoice.id)}
-                                >
-                                  <RefreshCw className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-purple-600 border-purple-200 hover:bg-purple-50"
-                                  title="Force Activate Pro Plan"
+                                  title="Aktifkan Paket Pro (Auto Refresh)"
                                   onClick={() => handleForceActivate(invoice.id)}
                                 >
-                                  <Crown className="h-3 w-3" />
+                                  <RefreshCw className="h-3 w-3" />
                                 </Button>
                               </div>
                             )}

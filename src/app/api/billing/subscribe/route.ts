@@ -193,8 +193,18 @@ export async function POST(request: NextRequest) {
     }
 
     // For paid plans, create payment via Mayar
-    if (!isMayarConfigured()) {
-      // Development mode: activate directly
+    const isMayarAvailable = isMayarConfigured();
+    console.log('[Subscribe] Mayar available:', isMayarAvailable);
+    
+    // Always try Mayar first (even in development)
+    if (isMayarAvailable) {
+      console.log('[Subscribe] Mayar configured - will create invoice');
+    } else {
+      console.log('[Subscribe] Mayar NOT configured - using development mode');
+    }
+    
+    if (!isMayarAvailable) {
+      // Development mode: activate directly without Mayar
       const now = new Date();
       const periodEnd = new Date();
       periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === "yearly" ? 12 : 1));
@@ -281,6 +291,19 @@ export async function POST(request: NextRequest) {
 
     try {
       // Create Mayar invoice
+      console.log('[Subscribe] ========== CREATE MAYAR INVOICE ==========');
+      console.log('[Subscribe] Environment:', process.env.MAYAR_ENV);
+      console.log('[Subscribe] API URL:', process.env.MAYAR_API_BASE_URL);
+      console.log('[Subscribe] API Key:', process.env.MAYAR_API_KEY ? 'Configured ✓' : 'Missing ✗');
+      console.log('[Subscribe] Invoice details:', {
+        organization: organization.name,
+        email: session.user.email,
+        plan,
+        price: `Rp ${price.toLocaleString('id-ID')}`,
+        billingCycle,
+        redirectUrl: `${REDIRECT_URL}/dashboard/billing?success=true`,
+      });
+      
       const invoice = await createInvoice({
         name: organization.name,
         email: session.user.email || `${organization.slug}@vibeclean.id`,
@@ -303,6 +326,12 @@ export async function POST(request: NextRequest) {
           invoiceNumber,
         },
       });
+
+      console.log('[Subscribe] ✓ Mayar invoice created successfully!');
+      console.log('[Subscribe] Invoice ID:', invoice.id);
+      console.log('[Subscribe] Transaction ID:', invoice.transactionId);
+      console.log('[Subscribe] Payment Link:', invoice.link);
+      console.log('[Subscribe] ==========================================');
 
       // Create subscription invoice record
       await db.insert(subscriptionInvoices).values({
@@ -331,17 +360,63 @@ export async function POST(request: NextRequest) {
         dueDate: dueDate.toISOString(),
       });
     } catch (error) {
-      console.error("Failed to create Mayar invoice:", error);
-      
+      console.error("[Subscribe] ✗ Failed to create Mayar invoice:", error);
+      console.error("[Subscribe] Error details:", {
+        name: error instanceof Error ? error.name : "Unknown",
+        message: error instanceof Error ? error.message : "Unknown",
+        stack: error instanceof Error ? error.stack : "No stack",
+      });
+
+      // Fallback: If Mayar fails in development, activate directly
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Subscribe] ⚠ Mayar failed - using development fallback");
+        const now = new Date();
+        const periodEnd = new Date();
+        periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === "yearly" ? 12 : 1));
+
+        if (subscriptionRecord) {
+          await db
+            .update(subscriptions)
+            .set({
+              plan,
+              status: "active",
+              price: String(price),
+              billingCycle,
+              currentPeriodStart: now,
+              currentPeriodEnd: periodEnd,
+              updatedAt: now,
+            })
+            .where(eq(subscriptions.id, subscriptionRecord.id));
+        }
+
+        await db
+          .update(organizations)
+          .set({
+            plan,
+            subscriptionStatus: "active",
+            updatedAt: now,
+          })
+          .where(eq(organizations.id, organization.id));
+
+        return NextResponse.json({
+          success: true,
+          message: `Paket ${planNames[plan]} telah diaktifkan! (Development Mode - Mayar Error: ${error instanceof Error ? error.message : "Unknown"})`,
+          requiresPayment: false,
+          developmentMode: true,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+
       if (error instanceof MayarError) {
+        console.error("[Subscribe] MayarError:", error.message);
         return NextResponse.json(
-          { error: `Payment error: ${error.message}` },
+          { error: `Mayar Error: ${error.message}` },
           { status: 500 }
         );
       }
 
       return NextResponse.json(
-        { error: "Failed to create payment" },
+        { error: "Failed to create payment. Please check Mayar configuration or try again." },
         { status: 500 }
       );
     }

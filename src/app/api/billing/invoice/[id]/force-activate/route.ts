@@ -67,8 +67,19 @@ export async function POST(
     }
 
     const now = new Date();
-    const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + 1); // 1 month subscription
+    
+    // Use period from invoice if available, otherwise calculate from now
+    let periodStart = now;
+    let periodEnd = new Date();
+    
+    if (invoice.periodEnd) {
+      // Use existing period from invoice
+      periodStart = new Date(invoice.periodStart || now);
+      periodEnd = new Date(invoice.periodEnd);
+    } else {
+      // Default: 1 month from now
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+    }
 
     // Check if subscription exists
     let [subscription] = await db
@@ -84,9 +95,9 @@ export async function POST(
           organizationId,
           plan: invoice.plan as any,
           status: "active",
-          currentPeriodStart: now,
+          currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
-          billingCycle: "monthly",
+          billingCycle: invoice.billingCycle || "monthly",
           mayarSubscriptionId: null,
           createdAt: now,
           updatedAt: now,
@@ -95,13 +106,15 @@ export async function POST(
 
       subscription = newSubscription;
     } else {
-      // Update existing subscription
+      // Update existing subscription with invoice period
       await db
         .update(subscriptions)
         .set({
           status: "active",
-          currentPeriodStart: now,
+          plan: invoice.plan as any,
+          currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
+          billingCycle: invoice.billingCycle || "monthly",
           updatedAt: now,
         })
         .where(eq(subscriptions.id, subscription.id));
