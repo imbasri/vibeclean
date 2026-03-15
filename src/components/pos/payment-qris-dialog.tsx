@@ -120,9 +120,12 @@ export function PaymentQRISDialog({
       if (!response.ok) {
         console.error("[PaymentQRIS] Payment creation failed:", data);
         const errorMessage = data.error || data.details || "Failed to create payment";
-        
+
         // Check for specific error types
-        if (response.status === 503) {
+        if (response.status === 429 || data.errorCode === 'RATE_LIMITED') {
+          // Rate limited
+          setError(errorMessage || "Terlalu banyak permintaan. Mohon tunggu beberapa saat.", "RATE_LIMITED");
+        } else if (response.status === 503) {
           // Payment gateway not configured - show manual payment option
           setError("Payment gateway tidak tersedia. Silakan gunakan pembayaran manual.", "GATEWAY_UNAVAILABLE");
         } else if (response.status === 500) {
@@ -131,7 +134,17 @@ export function PaymentQRISDialog({
         } else {
           setError(errorMessage, "PAYMENT_FAILED");
         }
-        
+
+        setStatus("error");
+        return;
+      }
+
+      console.log("[PaymentQRIS] Payment response:", data);
+
+      // Check if we have QR code or payment URL
+      if (!data.qrCodeUrl && !data.paymentUrl) {
+        console.warn("[PaymentQRIS] No QR code or payment URL received");
+        setError("Gagal membuat QR code. Silakan coba lagi atau gunakan pembayaran manual.", "NO_QR_CODE");
         setStatus("error");
         return;
       }
@@ -144,7 +157,7 @@ export function PaymentQRISDialog({
         transactionId: data.transactionId,
         expiredAt: data.expiredAt,
       });
-      
+
       setStatus("waiting");
 
       // Calculate countdown
@@ -154,7 +167,7 @@ export function PaymentQRISDialog({
         const remaining = Math.floor((expiredTime - now) / 1000);
         setCountdown(Math.max(0, remaining));
       }
-      
+
       console.log("[PaymentQRIS] Payment created successfully:", data.transactionId);
     } catch (err) {
       console.error("[PaymentQRIS] Error creating payment:", err);
