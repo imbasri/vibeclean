@@ -40,12 +40,8 @@ export interface MayarInvoiceData {
   id: string;
   transactionId: string;
   link: string;
-  expiredAt: number; // Unix timestamp in milliseconds
-  extraData?: {
-    orderId?: string;
-    branchId?: string;
-    [key: string]: string | undefined;
-  };
+  expiredAt: number;
+  extraData?: Record<string, string>;
 }
 
 // ============================================
@@ -55,11 +51,11 @@ export interface MayarInvoiceData {
 export interface MayarCreatePaymentRequest {
   name: string;
   email: string;
-  amount: number;
   mobile: string;
+  amount: number;
   redirectUrl: string;
   description: string;
-  expiredAt: string; // ISO 8601 format (UTC)
+  expiredAt: string;
 }
 
 export interface MayarPaymentData {
@@ -106,17 +102,14 @@ export interface MayarWebhookPayload {
   transactionId: string;
   status: MayarPaymentStatus;
   amount: number;
+  nettAmount?: number;
   paidAt?: string;
   expiredAt?: string;
   paymentMethod?: string;
   customerName?: string;
   customerEmail?: string;
   customerMobile?: string;
-  extraData?: {
-    orderId?: string;
-    branchId?: string;
-    [key: string]: string | undefined;
-  };
+  extraData?: Record<string, string>;
 }
 
 // ============================================

@@ -30,7 +30,7 @@ import type {
 // Mayar API base URLs for different environments
 const MAYAR_BASE_URLS: Record<string, string> = {
   production: "https://api.mayar.id/hl/v1",
-  sandbox: "https://sandbox-api.mayar.id/hl/v1",
+  sandbox: "https://sandbox-api.mayar.club/hl/v1",
 };
 
 // Environment configuration
