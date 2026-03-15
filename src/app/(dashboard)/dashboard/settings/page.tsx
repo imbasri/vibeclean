@@ -457,41 +457,41 @@ export default function SettingsPage() {
         animate="visible"
       >
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-            <TabsTrigger 
-              value="profile" 
-              className="flex items-center gap-2 py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all"
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1 h-auto bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            <TabsTrigger
+              value="profile"
+              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
             >
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Profil</span>
+              <User className="h-4 w-4 flex-shrink-0" />
+              <span className="text-center sm:text-left text-sm">Profil</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="organization" 
-              className="flex items-center gap-2 py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all"
+            <TabsTrigger
+              value="organization"
+              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
             >
-              <Building2 className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Organisasi</span>
+              <Building2 className="h-4 w-4 flex-shrink-0" />
+              <span className="text-center sm:text-left text-sm">Organisasi</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="notifications" 
-              className="flex items-center gap-2 py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all"
+            <TabsTrigger
+              value="notifications"
+              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
             >
-              <Bell className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Notifikasi</span>
+              <Bell className="h-4 w-4 flex-shrink-0" />
+              <span className="text-center sm:text-left text-sm">Notifikasi</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="security" 
-              className="flex items-center gap-2 py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all"
+            <TabsTrigger
+              value="security"
+              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
             >
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Keamanan</span>
+              <Shield className="h-4 w-4 flex-shrink-0" />
+              <span className="text-center sm:text-left text-sm">Keamanan</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="appearance" 
-              className="flex items-center gap-2 py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all"
+            <TabsTrigger
+              value="appearance"
+              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
             >
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Tampilan</span>
+              <Palette className="h-4 w-4 flex-shrink-0" />
+              <span className="text-center sm:text-left text-sm">Tampilan</span>
             </TabsTrigger>
           </TabsList>
 

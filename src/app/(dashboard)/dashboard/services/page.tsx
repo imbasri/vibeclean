@@ -365,18 +365,18 @@ export default function ServicesPage() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
       >
         <motion.div variants={itemVariants}>
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
                   <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{totalServices}</p>
-                  <p className="text-sm text-muted-foreground">Total Layanan</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl sm:text-2xl font-bold truncate">{totalServices}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Total Layanan</p>
                 </div>
               </div>
             </CardContent>
@@ -387,12 +387,12 @@ export default function ServicesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg flex-shrink-0">
                   <ToggleRight className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{activeServices}</p>
-                  <p className="text-sm text-muted-foreground">Layanan Aktif</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl sm:text-2xl font-bold truncate">{activeServices}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Layanan Aktif</p>
                 </div>
               </div>
             </CardContent>
@@ -403,12 +403,12 @@ export default function ServicesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex-shrink-0">
                   <DollarSign className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{formatCurrency(avgPrice)}</p>
-                  <p className="text-sm text-muted-foreground">Rata-rata Harga</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl sm:text-2xl font-bold truncate">{formatCurrency(avgPrice)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Rata-rata Harga</p>
                 </div>
               </div>
             </CardContent>
@@ -419,12 +419,12 @@ export default function ServicesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex-shrink-0">
                   <Layers className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{categories}</p>
-                  <p className="text-sm text-muted-foreground">Kategori</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl sm:text-2xl font-bold truncate">{categories}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Kategori</p>
                 </div>
               </div>
             </CardContent>
