@@ -19,6 +19,7 @@ function PaymentSuccessContent() {
   const router = useRouter();
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pollingCount, setPollingCount] = useState(0);
 
   // Use Zustand store
   const {
@@ -35,16 +36,41 @@ function PaymentSuccessContent() {
   const orderId = searchParams.get("orderId");
   const transactionId = searchParams.get("transactionId");
 
+  // Max polling: 100 times (5 minutes with 3s interval)
+  const MAX_POLLING_COUNT = 100;
+
   useEffect(() => {
-    console.log("[PaymentSuccess] Page loaded", { orderId, transactionId, paymentStatus });
-  }, [orderId, transactionId, paymentStatus]);
+    console.log("[PaymentSuccess] Page loaded", { orderId, transactionId, paymentStatus, pollingCount });
+  }, [orderId, transactionId, paymentStatus, pollingCount]);
 
   useEffect(() => {
     async function checkPaymentStatus() {
+      // Stop if already paid
+      if (paymentStatus === "paid") {
+        console.log("[PaymentSuccess] Payment already confirmed, stopping polling");
+        return;
+      }
+
+      // Stop if failed or expired
+      if (paymentStatus === "failed" || paymentStatus === "expired") {
+        console.log("[PaymentSuccess] Payment failed/expired, stopping polling");
+        return;
+      }
+
+      // Stop if no orderId
       if (!orderId) {
         console.error("[PaymentSuccess] No orderId provided");
         setHasError(true);
         setErrorMessage("Order ID tidak ditemukan");
+        setPaymentStatus("failed");
+        return;
+      }
+
+      // Stop if max polling reached (5 minutes)
+      if (pollingCount >= MAX_POLLING_COUNT) {
+        console.log("[PaymentSuccess] Max polling reached, stopping");
+        setHasError(true);
+        setErrorMessage("Waktu pemeriksaan habis. Silakan cek status order di dashboard.");
         setPaymentStatus("failed");
         return;
       }
@@ -55,7 +81,7 @@ function PaymentSuccessContent() {
           startChecking();
         }
 
-        console.log("[PaymentSuccess] Checking payment status...", { orderId, transactionId });
+        console.log(`[PaymentSuccess] Checking payment (${pollingCount + 1}/${MAX_POLLING_COUNT})...`, { orderId });
 
         const response = await fetch(`/api/orders/check-payment`, {
           method: "POST",
@@ -77,25 +103,32 @@ function PaymentSuccessContent() {
         setPaymentChecked(orderData);
 
         if (orderData.isPaid) {
-          console.log("[PaymentSuccess] Payment detected as PAID");
+          console.log("[PaymentSuccess] ✓ Payment detected as PAID - stopping polling");
           setPaymentStatus("paid");
+          // Stop polling - payment successful
+          return;
         } else if (orderData.isExpired) {
-          console.log("[PaymentSuccess] Payment EXPIRED");
+          console.log("[PaymentSuccess] ✗ Payment EXPIRED - stopping polling");
           setPaymentStatus("expired");
+          // Stop polling - payment expired
+          return;
         } else {
-          console.log("[PaymentSuccess] Payment still PENDING, will check again...");
+          console.log(`[PaymentSuccess] Payment still PENDING, will check again... (${pollingCount + 1}/${MAX_POLLING_COUNT})`);
         }
       } catch (error) {
         console.error("[PaymentSuccess] Error checking payment status:", error);
         setHasError(true);
         setErrorMessage(error instanceof Error ? error.message : "Gagal memeriksa status pembayaran");
         setPaymentStatus("failed");
+        // Stop polling on error
+        return;
       }
+
+      // Increment polling count
+      setPollingCount(prev => prev + 1);
     }
 
-    checkPaymentStatus();
-
-    // Poll for payment status if still checking
+    // Only poll if checking
     if (paymentStatus === "checking") {
       const interval = setInterval(() => {
         checkPaymentStatus();
@@ -106,7 +139,7 @@ function PaymentSuccessContent() {
         clearInterval(interval);
       };
     }
-  }, [orderId, transactionId, paymentStatus, isChecking, startChecking, setPaymentStatus, setPaymentChecked]);
+  }, [orderId, transactionId, paymentStatus, isChecking, pollingCount, startChecking, setPaymentStatus, setPaymentChecked]);
 
   // Cleanup on unmount
   useEffect(() => {
