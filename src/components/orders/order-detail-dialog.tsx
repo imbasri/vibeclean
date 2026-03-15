@@ -465,7 +465,37 @@ export function OrderDetailDialog({
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Tidak ada item</p>
+              // Fallback: Show order summary if items not available
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatCurrency(order.subtotal)}</span>
+                </div>
+                {order.discount && order.discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>
+                      Diskon {order.discountType === "percentage" && order.discount <= 100 ? `(${order.discount}%)` : ""}
+                    </span>
+                    <span>
+                      -{formatCurrency(
+                        order.discountType === "percentage" && order.discount <= 100
+                          ? (order.subtotal * order.discount) / 100
+                          : order.discount
+                      )}
+                    </span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between font-bold">
+                  <span>Total</span>
+                  <span>{formatCurrency(order.total)}</span>
+                </div>
+                {order.items && order.items.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    ⚠️ Detail item tidak tersedia. Order dibuat melalui pembayaran langsung.
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
