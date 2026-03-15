@@ -410,8 +410,8 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
   // Extract organization ID from custom_field or extraData
   let organizationId: string | null = null;
   let subscriptionId: string | null = null;
-  let plan: string | null = null;
-  let billingCycle: string | null = null;
+  let plan: "starter" | "pro" | "enterprise" | null = null;
+  let billingCycle: "monthly" | "yearly" | null = null;
 
   // Check custom_field
   if (data.custom_field) {
@@ -434,14 +434,22 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
       (f) => f.key === "plan"
     );
     if (planField) {
-      plan = String(planField.value);
+      const planValue = String(planField.value);
+      // Validate plan value
+      if (["starter", "pro", "enterprise"].includes(planValue)) {
+        plan = planValue as "starter" | "pro" | "enterprise";
+      }
     }
 
     const billingCycleField = data.custom_field.find(
       (f) => f.key === "billingCycle" || f.key === "billing_cycle"
     );
     if (billingCycleField) {
-      billingCycle = String(billingCycleField.value);
+      const billingCycleValue = String(billingCycleField.value);
+      // Validate billing cycle value
+      if (["monthly", "yearly"].includes(billingCycleValue)) {
+        billingCycle = billingCycleValue as "monthly" | "yearly";
+      }
     }
   }
 
@@ -449,8 +457,18 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
   if (data.extraData) {
     organizationId = organizationId || data.extraData.organization_id || data.extraData.orgId || null;
     subscriptionId = subscriptionId || data.extraData.subscription_id || data.extraData.subscriptionId || null;
-    plan = plan || data.extraData.plan || null;
-    billingCycle = billingCycle || data.extraData.billingCycle || data.extraData.billing_cycle || null;
+    
+    // Extract and validate plan from extraData
+    const planValue = data.extraData.plan;
+    if (planValue && ["starter", "pro", "enterprise"].includes(planValue)) {
+      plan = planValue as "starter" | "pro" | "enterprise";
+    }
+    
+    // Extract and validate billingCycle from extraData
+    const billingCycleValue = data.extraData.billingCycle || data.extraData.billing_cycle;
+    if (billingCycleValue && ["monthly", "yearly"].includes(billingCycleValue)) {
+      billingCycle = billingCycleValue as "monthly" | "yearly";
+    }
   }
 
   if (!organizationId) {
@@ -496,8 +514,8 @@ async function handleSubscriptionPaymentReceived(data: MayarWebhookData["data"])
   const nettAmount = data.nettAmount || data.amount;
 
   // Use plan from invoice data if available, otherwise keep existing
-  const updatedPlan = plan || subscription.plan;
-  const updatedBillingCycle = billingCycle || subscription.billingCycle || "monthly";
+  const updatedPlan: "starter" | "pro" | "enterprise" = plan || subscription.plan;
+  const updatedBillingCycle: "monthly" | "yearly" = billingCycle || (subscription.billingCycle as "monthly" | "yearly") || "monthly";
 
   // Calculate new billing period based on billing cycle
   const currentPeriodStart = new Date();
