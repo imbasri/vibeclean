@@ -456,44 +456,47 @@ export default function SettingsPage() {
         initial="hidden"
         animate="visible"
       >
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1 h-auto bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-            <TabsTrigger
-              value="profile"
-              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
-            >
-              <User className="h-4 w-4 flex-shrink-0" />
-              <span className="text-center sm:text-left text-sm">Profil</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="organization"
-              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
-            >
-              <Building2 className="h-4 w-4 flex-shrink-0" />
-              <span className="text-center sm:text-left text-sm">Organisasi</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="notifications"
-              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
-            >
-              <Bell className="h-4 w-4 flex-shrink-0" />
-              <span className="text-center sm:text-left text-sm">Notifikasi</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="security"
-              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
-            >
-              <Shield className="h-4 w-4 flex-shrink-0" />
-              <span className="text-center sm:text-left text-sm">Keamanan</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="appearance"
-              className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-3 sm:py-2.5 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md transition-all text-xs sm:text-sm"
-            >
-              <Palette className="h-4 w-4 flex-shrink-0" />
-              <span className="text-center sm:text-left text-sm">Tampilan</span>
-            </TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="profile" className="space-y-4">
+          {/* Modern Scrollable Tabs for Mobile */}
+          <div className="relative">
+            <TabsList className="w-full flex flex-nowrap overflow-x-auto gap-2 bg-transparent p-0 h-auto scrollbar-hide">
+              <TabsTrigger
+                value="profile"
+                className="flex items-center gap-2 px-4 py-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-xl transition-all text-sm font-medium whitespace-nowrap bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              >
+                <User className="h-4 w-4" />
+                <span>Profil</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="organization"
+                className="flex items-center gap-2 px-4 py-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-xl transition-all text-sm font-medium whitespace-nowrap bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              >
+                <Building2 className="h-4 w-4" />
+                <span>Organisasi</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="notifications"
+                className="flex items-center gap-2 px-4 py-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-xl transition-all text-sm font-medium whitespace-nowrap bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              >
+                <Bell className="h-4 w-4" />
+                <span>Notifikasi</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="security"
+                className="flex items-center gap-2 px-4 py-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-xl transition-all text-sm font-medium whitespace-nowrap bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              >
+                <Shield className="h-4 w-4" />
+                <span>Keamanan</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="appearance"
+                className="flex items-center gap-2 px-4 py-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-xl transition-all text-sm font-medium whitespace-nowrap bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              >
+                <Palette className="h-4 w-4" />
+                <span>Tampilan</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Profile Tab */}
           <TabsContent value="profile">
