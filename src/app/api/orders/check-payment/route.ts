@@ -104,6 +104,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(`[CheckPayment] Checking payment for order: ${orderId}`);
+
     // Get order from database
     const [order] = await db
       .select()
@@ -111,18 +113,22 @@ export async function POST(request: NextRequest) {
       .where(eq(orders.id, orderId));
 
     if (!order) {
+      console.log(`[CheckPayment] Order not found: ${orderId}`);
       return NextResponse.json(
         { error: 'Order not found' },
         { status: 404 }
       );
     }
 
+    console.log(`[CheckPayment] Order found: ${order.orderNumber}, status: ${order.paymentStatus}`);
+
     // If already paid in database, return immediately
     if (order.paymentStatus === 'paid') {
-      const isExpired = order.paymentExpiredAt 
-        ? new Date(order.paymentExpiredAt) < new Date() 
+      const isExpired = order.paymentExpiredAt
+        ? new Date(order.paymentExpiredAt) < new Date()
         : false;
 
+      console.log(`[CheckPayment] Order already paid, returning from database`);
       return NextResponse.json({
         success: true,
         order: {
@@ -141,6 +147,8 @@ export async function POST(request: NextRequest) {
 
     // Check with Mayar API if we have payment ID
     let mayarIsPaid = false;
+    let mayarError = false;
+    
     if (order.mayarPaymentId) {
       try {
         console.log(`[CheckPayment] Checking Mayar for payment: ${order.mayarPaymentId}`);
@@ -148,12 +156,15 @@ export async function POST(request: NextRequest) {
         mayarIsPaid = mayarStatus.isPaid;
         console.log(`[CheckPayment] Mayar status for ${order.mayarPaymentId}:`, mayarStatus);
       } catch (error) {
-        console.error('[CheckPayment] Mayar API error:', error);
+        // Log error but don't fail - Mayar API might return errors for already-paid invoices
+        mayarError = true;
+        console.warn(`[CheckPayment] Mayar API error (non-fatal): ${error instanceof Error ? error.message : error}`);
       }
     }
 
     // Update order if Mayar says PAID but database says unpaid
     if (mayarIsPaid) {
+      console.log(`[CheckPayment] Mayar reports paid, updating order...`);
       const grossAmount = parseFloat(order.total);
       await updateOrderToPaid(order, grossAmount);
     }
@@ -165,9 +176,13 @@ export async function POST(request: NextRequest) {
       .where(eq(orders.id, orderId));
 
     const isPaid = updatedOrder.paymentStatus === 'paid';
-    const isExpired = updatedOrder.paymentExpiredAt 
-      ? new Date(updatedOrder.paymentExpiredAt) < new Date() 
+    const isExpired = updatedOrder.paymentExpiredAt
+      ? new Date(updatedOrder.paymentExpiredAt) < new Date()
       : false;
+
+    const source = mayarIsPaid ? 'mayar_updated' : (mayarError ? 'database_mayar_error' : 'database');
+    
+    console.log(`[CheckPayment] Returning result: isPaid=${isPaid}, source=${source}`);
 
     return NextResponse.json({
       success: true,
@@ -181,10 +196,10 @@ export async function POST(request: NextRequest) {
         amount: updatedOrder.total,
         mayarTransactionId: updatedOrder.mayarTransactionId,
       },
-      source: mayarIsPaid ? 'mayar_updated' : 'database',
+      source,
     });
   } catch (error) {
-    console.error('Error checking payment status:', error);
+    console.error('[CheckPayment] Unexpected error:', error);
     return NextResponse.json(
       { error: 'Failed to check payment status' },
       { status: 500 }

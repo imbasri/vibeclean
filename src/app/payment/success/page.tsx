@@ -91,6 +91,14 @@ function PaymentSuccessContent() {
 
         if (!response.ok) {
           console.error("[PaymentSuccess] API response not OK:", response.status);
+          // Don't throw error immediately - check if we got a response
+          // Server errors (500) might still return useful data
+          if (response.status >= 500) {
+            // Server error - log but continue, might be transient
+            console.warn("[PaymentSuccess] Server error, will retry...");
+            setPollingCount(prev => prev + 1);
+            return;
+          }
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
@@ -117,10 +125,15 @@ function PaymentSuccessContent() {
         }
       } catch (error) {
         console.error("[PaymentSuccess] Error checking payment status:", error);
-        setHasError(true);
-        setErrorMessage(error instanceof Error ? error.message : "Gagal memeriksa status pembayaran");
-        setPaymentStatus("failed");
-        // Stop polling on error
+        // Don't immediately fail on error - let it retry a few times
+        // Only show error after multiple failures
+        if (pollingCount > 5) {
+          setHasError(true);
+          setErrorMessage(error instanceof Error ? error.message : "Gagal memeriksa status pembayaran");
+          setPaymentStatus("failed");
+        }
+        // Increment polling count and continue retrying
+        setPollingCount(prev => prev + 1);
         return;
       }
 
