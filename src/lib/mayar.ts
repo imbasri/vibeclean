@@ -21,6 +21,7 @@ import type {
     MayarWebhookPayload,
     PaymentRequest,
     PaymentResponse,
+    MayarInvoiceStatus,
 } from '@/types/mayar';
 
 // ============================================
@@ -360,12 +361,7 @@ export async function createOrderPayment(
 /**
  * Get invoice details and status from Mayar
  */
-export async function getInvoiceStatus(invoiceId: string): Promise<{
-    id: string;
-    status: string;
-    isPaid: boolean;
-    paidAt?: string;
-}> {
+export async function getInvoiceStatus(invoiceId: string): Promise<MayarInvoiceStatus> {
     const response = await mayarFetch<{
         id: string;
         status: string;
@@ -374,14 +370,16 @@ export async function getInvoiceStatus(invoiceId: string): Promise<{
         method: 'GET',
     });
 
-    const status = response.data.status?.toUpperCase();
+    const status = response.data.status?.toUpperCase() || 'UNKNOWN';
     const isPaid =
         status === 'PAID' || status === 'SUCCESS' || status === 'COMPLETED';
+    const isExpired = status === 'EXPIRED';
 
     return {
         id: response.data.id,
         status: response.data.status,
         isPaid,
+        isExpired,
         paidAt: response.data.paidAt,
     };
 }

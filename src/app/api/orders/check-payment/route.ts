@@ -35,7 +35,7 @@ async function updateOrderToPaid(order: typeof orders.$inferSelect, grossAmount:
       orderId: order.id,
       fromStatus: order.status,
       toStatus: order.status,
-      changedBy: order.createdBy || 'system',
+      changedBy: order.createdBy,
       notes: `Pembayaran diterima via cek polling - Rp ${grossAmount.toLocaleString('id-ID')} (fee: Rp ${transactionFee})`,
     });
 
@@ -150,9 +150,10 @@ export async function POST(request: NextRequest) {
     let mayarError = false;
     
     if (order.mayarPaymentId) {
+      const mayarPaymentId = order.mayarPaymentId;
       try {
-        console.log(`[CheckPayment] Checking Mayar for payment: ${order.mayarPaymentId}`);
-        const mayarStatus = await getInvoiceStatus(order.mayarPaymentId);
+        console.log(`[CheckPayment] Checking Mayar for payment: ${mayarPaymentId}`);
+        const mayarStatus = await getInvoiceStatus(mayarPaymentId);
         mayarIsPaid = mayarStatus.isPaid;
         console.log(`[CheckPayment] Mayar status for ${order.mayarPaymentId}:`, mayarStatus);
       } catch (error) {

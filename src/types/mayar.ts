@@ -147,3 +147,11 @@ export interface PaymentStatusCheck {
   paidAt?: Date;
   paymentMethod?: string;
 }
+
+export interface MayarInvoiceStatus {
+  id: string;
+  status: string;
+  isPaid: boolean;
+  isExpired: boolean;
+  paidAt?: string;
+}

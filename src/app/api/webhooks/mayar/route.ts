@@ -220,8 +220,13 @@ async function updateOrderToPaid(
   }
 
   const paidAt = new Date(data.updatedAt || new Date().toISOString());
-  const grossAmount = data.amount;
-  const nettAmount = data.nettAmount || data.amount;
+  const grossAmount = Number(data.amount) || 0;
+  const nettAmount = Number(data.nettAmount || data.amount) || 0;
+  
+  if (grossAmount <= 0) {
+    console.warn(`[Mayar Webhook] Skipping order ${order.orderNumber} - invalid amount: ${grossAmount}`);
+    return;
+  }
   
   // Map Mayar payment method to our enum
   let paymentMethod: "cash" | "qris" | "transfer" | "ewallet" = "qris";
@@ -267,7 +272,7 @@ async function updateOrderToPaid(
       orderId: order.id,
       fromStatus: order.status,
       toStatus: order.status, // Status doesn't change, only payment status
-      changedBy: order.createdBy, // Use order creator as system fallback
+      changedBy: order.createdBy, // Correctly use order creator UUID
       notes: `Pembayaran diterima via ${data.paymentMethod || "Mayar"} - Rp ${nettAmount.toLocaleString("id-ID")} (fee: Rp ${transactionFee})`,
     });
 

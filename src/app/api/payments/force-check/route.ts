@@ -1,6 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, orders } from '@/lib/db';
+import { db, orders, orderStatusHistory, branches, organizationBalances, balanceTransactions } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+import { getInvoiceStatus } from '@/lib/mayar';
+import { calculateTransactionFee, getTransactionFeeSettings } from '@/lib/config/platform';
+
+async function updateOrderToPaid(order: typeof orders.$inferSelect, grossAmount: number) {
+  const feeSettings = await getTransactionFeeSettings();
+  const transactionFee = calculateTransactionFee(grossAmount, feeSettings);
+  const netAmountForOwner = grossAmount - transactionFee;
+  const paidAt = new Date();
+
+  console.log(`[ForceCheck] Transaction fee for order ${order.orderNumber}: Rp ${transactionFee} (type: ${feeSettings.feeType}, value: ${feeSettings.feeValue}%)`);
+
+  const [branch] = await db
+    .select()
+    .from(branches)
+    .where(eq(branches.id, order.branchId));
+
+  const organizationId = branch?.organizationId;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(orders)
+      .set({
+        paymentStatus: 'paid',
+        paidAmount: String(grossAmount),
+        transactionFee: String(transactionFee),
+        paidAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, order.id));
+
+    await tx.insert(orderStatusHistory).values({
+      orderId: order.id,
+      fromStatus: order.status,
+      toStatus: order.status,
+      changedBy: order.createdBy,
+      notes: `Pembayaran diterima via manual force check - Rp ${grossAmount.toLocaleString('id-ID')} (fee: Rp ${transactionFee})`,
+    });
+
+    if (organizationId) {
+      let [balance] = await tx
+        .select()
+        .from(organizationBalances)
+        .where(eq(organizationBalances.organizationId, organizationId));
+
+      if (!balance) {
+        const [newBalance] = await tx.insert(organizationBalances).values({
+          organizationId,
+          totalEarnings: '0',
+          availableBalance: '0',
+          pendingBalance: '0',
+          totalWithdrawn: '0',
+        }).returning();
+        balance = newBalance;
+      }
+
+      const currentTotalEarnings = parseFloat(balance.totalEarnings || '0');
+      const currentAvailable = parseFloat(balance.availableBalance || '0');
+
+      const newTotalEarnings = currentTotalEarnings + grossAmount;
+      const newAvailableBalance = currentAvailable + netAmountForOwner;
+
+      await tx
+        .update(organizationBalances)
+        .set({
+          totalEarnings: String(newTotalEarnings),
+          availableBalance: String(newAvailableBalance),
+          lastTransactionAt: paidAt,
+          updatedAt: paidAt,
+        })
+        .where(eq(organizationBalances.organizationId, organizationId));
+
+      await tx.insert(balanceTransactions).values({
+        organizationId,
+        orderId: order.id,
+        type: 'payment_received',
+        status: 'completed',
+        amount: String(grossAmount),
+        feeAmount: String(transactionFee),
+        netAmount: String(netAmountForOwner),
+        description: `Pembayaran order ${order.orderNumber}`,
+        completedAt: paidAt,
+      });
+
+      console.log(`[ForceCheck] Balance updated for org ${organizationId}: +Rp ${netAmountForOwner}`);
+    }
+  });
+
+  console.log(`[ForceCheck] Order ${order.orderNumber} marked as PAID`);
+}
 
 // POST /api/payments/force-check - Force check payment status from Mayar API and update if paid
 export async function POST(request: NextRequest) {
@@ -79,65 +168,22 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Call Mayar API to get payment status
-      // Note: This requires MAYAR_API_KEY to be set
-      const MAYAR_API_BASE_URL = process.env.MAYAR_API_BASE_URL || 'https://sandbox-api.mayar.id/hl/v1';
-      const MAYAR_API_KEY = process.env.MAYAR_API_KEY;
-
-      if (!MAYAR_API_KEY) {
-        console.error('[Force Check] MAYAR_API_KEY not configured');
-        return NextResponse.json({
-          success: true,
-          order: {
-            id: order.id,
-            orderNumber: order.orderNumber,
-            paymentStatus: order.paymentStatus,
-            isPaid: false,
-            isExpired: false,
-            paidAt: null,
-            amount: order.total,
-            mayarTransactionId: order.mayarTransactionId,
-          },
-          message: 'MAYAR_API_KEY not configured. Cannot check Mayar API.',
-        });
-      }
-
-      const mayarResponse = await fetch(`${MAYAR_API_BASE_URL}/payment/${mayarPaymentId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${MAYAR_API_KEY}`,
-        },
-      });
-
-      if (!mayarResponse.ok) {
-        console.error('[Force Check] Mayar API error:', mayarResponse.status, mayarResponse.statusText);
-        throw new Error(`Mayar API error: ${mayarResponse.status}`);
-      }
-
-      const mayarData = await mayarResponse.json();
-      console.log('[Force Check] Mayar API response:', mayarData);
-
-      const paymentData = mayarData.data;
-      const isPaid = paymentData?.status === 'SUCCESS' || 
-                     paymentData?.transactionStatus === 'paid' ||
-                     paymentData?.status === 'PAID';
+      // Use common library function
+      console.log(`[Force Check] Checking Mayar for payment: ${order.mayarPaymentId}`);
+      const mayarStatus = await getInvoiceStatus(mayarPaymentId);
+      const { isPaid, isExpired } = mayarStatus;
+      console.log(`[Force Check] Mayar status for ${order.mayarPaymentId}:`, mayarStatus);
 
       if (isPaid) {
-        // Update order to paid
-        const paidAt = paymentData?.paidAt 
-          ? new Date(paymentData.paidAt)
-          : new Date();
+        console.log(`[Force Check] Mayar reports paid, updating order...`);
+        const grossAmount = parseFloat(order.total);
+        await updateOrderToPaid(order, grossAmount);
         
-        await db
-          .update(orders)
-          .set({
-            paymentStatus: 'paid',
-            paidAt,
-            updatedAt: new Date(),
-          })
+        // Get updated order
+        const [updatedOrder] = await db
+          .select()
+          .from(orders)
           .where(eq(orders.id, order.id));
-
-        console.log('[Force Check] ✓ Order updated to PAID:', order.orderNumber);
 
         return NextResponse.json({
           success: true,
@@ -147,14 +193,14 @@ export async function POST(request: NextRequest) {
             paymentStatus: 'paid',
             isPaid: true,
             isExpired: false,
-            paidAt,
+            paidAt: updatedOrder.paidAt,
             amount: order.total,
             mayarTransactionId: order.mayarTransactionId,
           },
           message: 'Payment status updated from Mayar API',
         });
       } else {
-        console.log('[Force Check] Payment still pending in Mayar:', paymentData?.status);
+        console.log('[Force Check] Payment still pending in Mayar');
         
         return NextResponse.json({
           success: true,
@@ -163,7 +209,7 @@ export async function POST(request: NextRequest) {
             orderNumber: order.orderNumber,
             paymentStatus: order.paymentStatus,
             isPaid: false,
-            isExpired: paymentData?.status === 'EXPIRED',
+            isExpired: isExpired,
             paidAt: null,
             amount: order.total,
             mayarTransactionId: order.mayarTransactionId,

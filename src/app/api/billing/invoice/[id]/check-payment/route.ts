@@ -126,9 +126,11 @@ export async function POST(
       );
     }
 
+    const mayarPaymentId = invoice.mayarPaymentId;
+
     try {
       // Check payment status with Mayar
-      const mayarStatus = await getInvoiceStatus(invoice.mayarPaymentId);
+      const mayarStatus = await getInvoiceStatus(mayarPaymentId);
 
       // Update local database if paid
       if (mayarStatus.isPaid) {
